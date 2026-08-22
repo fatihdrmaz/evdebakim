@@ -3,14 +3,14 @@ import { useState } from "react";
 import { tl } from "@/lib/format";
 import { Card, Field } from "@/components/ui";
 
-export default function SaleForm({ patientId, services, action }: { patientId: string; services: any[]; action: (fd: FormData) => Promise<void> }) {
+export default function SaleForm({ patientId, encounterId, services, action }: { patientId: string; encounterId: string; services: any[]; action: (fd: FormData) => Promise<void> }) {
   const [svc, setSvc] = useState(services[0]?.id ?? "");
   const [count, setCount] = useState(5);
   const [price, setPrice] = useState<number>(services[0]?.default_price ?? 0);
   const [payer, setPayer] = useState("hasta");
   return (
     <form action={action} className="space-y-4">
-      <input type="hidden" name="patient_id" value={patientId} />
+      <input type="hidden" name="patient_id" value={patientId} /><input type="hidden" name="encounter_id" value={encounterId} />
       <Card title="Hizmet">
         <div className="space-y-4">
           <Field label="Hizmet" required><select name="service_id" className="input" value={svc} onChange={e => { setSvc(e.target.value); setPrice(services.find(s => s.id === e.target.value)?.default_price ?? 0); }}>{services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>

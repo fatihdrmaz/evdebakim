@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 const s = (fd: FormData, k: string) => { const v = fd.get(k); return v === null || v === "" ? null : String(v); };
 const n = (fd: FormData, k: string) => { const v = s(fd, k); return v === null ? null : Number(v.replace(",", ".")); };
 
+// ---------- HASTA ----------
 export async function savePatient(fd: FormData) {
   const sb = await createClient();
   const id = s(fd, "id");
@@ -15,10 +16,11 @@ export async function savePatient(fd: FormData) {
     birth_date: s(fd, "birth_date"), gender: s(fd, "gender"), address: s(fd, "address"), doctor_id: s(fd, "doctor_id"), notes: s(fd, "notes"),
     updated_at: new Date().toISOString(),
   };
-  let pid = id;
-  if (id) { const { error } = await sb.from("patients").update(row).eq("id", id); if (error) throw error; }
-  else { const { data, error } = await sb.from("patients").insert(row).select("id").single(); if (error) throw error; pid = data.id; }
-  revalidatePath("/hastalar"); redirect(`/hastalar/${pid}`);
+  if (id) { const { error } = await sb.from("patients").update(row).eq("id", id); if (error) throw error; revalidatePath("/hastalar"); redirect(`/hastalar/${id}`); }
+  const { data, error } = await sb.from("patients").insert(row).select("id").single(); if (error) throw error;
+  // Yeni hasta → doğrudan ilk muayeneyi aç
+  const { data: enc, error: e2 } = await sb.from("encounters").insert({ patient_id: data.id, doctor_id: row.doctor_id }).select("id").single(); if (e2) throw e2;
+  revalidatePath("/hastalar"); redirect(`/muayene/${enc.id}`);
 }
 
 export async function saveAnamnesis(fd: FormData) {
@@ -32,26 +34,53 @@ export async function saveAnamnesis(fd: FormData) {
     updated_at: new Date().toISOString(),
   });
   if (error) throw error;
-  redirect(`/hastalar/${patient_id}`);
+  const back = s(fd, "back") ?? `/hastalar/${patient_id}`;
+  revalidatePath(back); redirect(back);
 }
 
-export async function createSale(fd: FormData) {
+// ---------- MUAYENE ----------
+export async function createEncounter(fd: FormData) {
   const sb = await createClient();
   const patient_id = s(fd, "patient_id")!;
+  const { data, error } = await sb.from("encounters").insert({ patient_id, doctor_id: s(fd, "doctor_id"), complaint: s(fd, "complaint"), opened_at: s(fd, "opened_at") ?? undefined }).select("id").single();
+  if (error) throw error;
+  revalidatePath(`/hastalar/${patient_id}`); redirect(`/muayene/${data.id}`);
+}
+
+export async function updateEncounter(fd: FormData) {
+  const sb = await createClient();
+  const id = s(fd, "id")!;
+  const { error } = await sb.from("encounters").update({ doctor_id: s(fd, "doctor_id"), opened_at: s(fd, "opened_at") ?? undefined, complaint: s(fd, "complaint"), diagnosis: s(fd, "diagnosis"), plan: s(fd, "plan"), notes: s(fd, "notes"), updated_at: new Date().toISOString() }).eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/muayene/${id}`);
+}
+
+export async function setEncounterStatus(id: string, status: "acik" | "kapali") {
+  const sb = await createClient();
+  const { error } = await sb.from("encounters").update({ status, closed_at: status === "kapali" ? new Date().toISOString().slice(0, 10) : null }).eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/muayene/${id}`);
+}
+
+// ---------- SATIŞ & ÖDEME ----------
+export async function createSale(fd: FormData) {
+  const sb = await createClient();
+  const encounter_id = s(fd, "encounter_id")!;
   const { error } = await sb.from("sales").insert({
-    patient_id, service_id: s(fd, "service_id"), session_count: n(fd, "session_count"), unit_price: n(fd, "unit_price"), payer: s(fd, "payer"), notes: s(fd, "notes"),
+    encounter_id, patient_id: s(fd, "patient_id"), service_id: s(fd, "service_id"), session_count: n(fd, "session_count"), unit_price: n(fd, "unit_price"), payer: s(fd, "payer"), notes: s(fd, "notes"),
   });
   if (error) throw error;
-  redirect(`/hastalar/${patient_id}`);
+  revalidatePath(`/muayene/${encounter_id}`); redirect(`/muayene/${encounter_id}`);
 }
 
 export async function addPayment(fd: FormData) {
   const sb = await createClient();
   const { error } = await sb.from("payments").insert({ sale_id: s(fd, "sale_id"), amount: n(fd, "amount"), method: s(fd, "method"), paid_at: s(fd, "paid_at") ?? undefined, notes: s(fd, "notes") });
   if (error) throw error;
-  revalidatePath(`/hastalar/${s(fd, "patient_id")}`);
+  revalidatePath(`/muayene/${s(fd, "encounter_id")}`);
 }
 
+// ---------- SEANS ----------
 export async function scheduleSession(fd: FormData) {
   const sb = await createClient();
   const id = s(fd, "id")!;
@@ -60,13 +89,34 @@ export async function scheduleSession(fd: FormData) {
   revalidatePath("/takvim"); revalidatePath("/"); revalidatePath(`/seans/${id}`);
 }
 
-export async function setSessionStatus(id: string, status: string, patient_id?: string) {
+/** Hızlı planlama: planlanmamış (veya tümü) seansları başlangıç gününden itibaren ardışık günlere aynı saate dağıt. */
+export async function bulkSchedule(fd: FormData) {
+  const sb = await createClient();
+  const sale_id = s(fd, "sale_id")!; const encounter_id = s(fd, "encounter_id")!;
+  const startDate = s(fd, "start_date")!; const time = s(fd, "time") ?? "10:00"; const nurse_id = s(fd, "nurse_id");
+  const skipWeekends = fd.get("skip_weekends") === "on"; const onlyUnscheduled = fd.get("only_unscheduled") === "on";
+  const every = Math.max(1, n(fd, "every_days") ?? 1);
+  let q = sb.from("sessions").select("id, seq, scheduled_at").eq("sale_id", sale_id).eq("status", "planlandi").order("seq");
+  if (onlyUnscheduled) q = q.is("scheduled_at", null);
+  const { data: sessions, error } = await q; if (error) throw error;
+  const [h, m] = time.split(":").map(Number);
+  const cur = new Date(`${startDate}T00:00:00`); cur.setHours(h, m, 0, 0);
+  for (const sess of sessions ?? []) {
+    while (skipWeekends && (cur.getDay() === 0 || cur.getDay() === 6)) cur.setDate(cur.getDate() + 1);
+    const { error: e } = await sb.from("sessions").update({ scheduled_at: cur.toISOString(), ...(nurse_id ? { nurse_id } : {}) }).eq("id", sess.id); if (e) throw e;
+    cur.setDate(cur.getDate() + every);
+  }
+  revalidatePath(`/muayene/${encounter_id}`); revalidatePath("/takvim"); revalidatePath("/");
+}
+
+export async function setSessionStatus(id: string, status: string, encounter_id?: string) {
   const sb = await createClient();
   const patch: Record<string, unknown> = { status };
   if (status === "tamamlandi") patch.completed_at = new Date().toISOString();
   const { error } = await sb.from("sessions").update(patch).eq("id", id);
   if (error) throw error;
-  revalidatePath(`/seans/${id}`); revalidatePath("/takvim"); revalidatePath("/"); if (patient_id) revalidatePath(`/hastalar/${patient_id}`);
+  revalidatePath(`/seans/${id}`); revalidatePath("/takvim"); revalidatePath("/"); if (encounter_id) revalidatePath(`/muayene/${encounter_id}`);
+  if (status === "tamamlandi" && encounter_id) redirect(`/muayene/${encounter_id}`);
 }
 
 export async function addVital(fd: FormData) {
@@ -76,6 +126,12 @@ export async function addVital(fd: FormData) {
     session_id, phase: s(fd, "phase"), bp_sys: n(fd, "bp_sys"), bp_dia: n(fd, "bp_dia"), pulse: n(fd, "pulse"), temp: n(fd, "temp"), spo2: n(fd, "spo2"), glucose: n(fd, "glucose"), notes: s(fd, "notes"),
   });
   if (error) throw error;
+  revalidatePath(`/seans/${session_id}`);
+}
+
+export async function deleteVital(id: string, session_id: string) {
+  const sb = await createClient();
+  await sb.from("vitals").delete().eq("id", id);
   revalidatePath(`/seans/${session_id}`);
 }
 
@@ -114,6 +170,7 @@ export async function saveConsent(session_id: string, dataUrl: string, signer_na
   revalidatePath(`/seans/${session_id}`);
 }
 
+// ---------- STOK ----------
 export async function createPurchase(fd: FormData) {
   const sb = await createClient();
   const { data: p, error } = await sb.from("purchases").insert({ supplier: s(fd, "supplier"), invoice_no: s(fd, "invoice_no"), invoice_date: s(fd, "invoice_date") ?? undefined, total: n(fd, "total"), notes: s(fd, "notes") }).select("id").single();
@@ -133,6 +190,7 @@ export async function saveProduct(fd: FormData) {
   revalidatePath("/stok"); revalidatePath("/ayarlar");
 }
 
+// ---------- AYARLAR ----------
 export async function saveService(fd: FormData) {
   const sb = await createClient();
   const id = s(fd, "id");

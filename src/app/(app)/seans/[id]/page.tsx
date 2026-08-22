@@ -1,21 +1,48 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
-import { addVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus } from "@/lib/actions";
+import { addVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
 
-const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara", bitis: "Bitiş" };
-const Step = ({ ok, label }: { ok: boolean; label: string }) => <span className={`inline-flex items-center gap-1.5 text-sm ${ok ? "text-emerald-700" : "text-slate-500"}`}>{ok ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}{label}</span>;
+const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
+
+function VitalForm({ sessionId, phase }: { sessionId: string; phase: string }) {
+  return (
+    <form action={addVital} className="space-y-3"><input type="hidden" name="session_id" value={sessionId} /><input type="hidden" name="phase" value={phase} />
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="Büyük TA"><input name="bp_sys" type="number" inputMode="numeric" className="input px-3" placeholder="120" /></Field>
+        <Field label="Küçük TA"><input name="bp_dia" type="number" inputMode="numeric" className="input px-3" placeholder="80" /></Field>
+        <Field label="Nabız"><input name="pulse" type="number" inputMode="numeric" className="input px-3" placeholder="72" /></Field>
+        <Field label="Ateş °C"><input name="temp" type="number" step="0.1" inputMode="decimal" className="input px-3" placeholder="36.5" /></Field>
+        <Field label="SpO₂ %"><input name="spo2" type="number" inputMode="numeric" className="input px-3" placeholder="98" /></Field>
+        <Field label="Kan şekeri"><input name="glucose" type="number" inputMode="numeric" className="input px-3" placeholder="100" /></Field>
+      </div>
+      <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
+      <button className="btn w-full"><Plus className="size-4" />{PHASE[phase]} Ölçümünü Kaydet</button>
+    </form>
+  );
+}
+
+function VitalRow({ v, open, sessionId }: { v: any; open: boolean; sessionId: string }) {
+  const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <div className="w-14 shrink-0 text-xs"><div className="font-semibold">{PHASE[v.phase]}</div><div className="text-slate-500 num">{new Date(v.measured_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</div></div>
+      <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
+      {open && <form action={deleteVital.bind(null, v.id, sessionId)}><button aria-label="Sil" className="btn-icon size-8 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}
+    </div>
+  );
+}
 
 export default async function Session({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const sb = await createClient(); const me = await getProfile();
-  const { data: s } = await sb.from("sessions").select("*, patients(*), sales(session_count, service_id, services(name, requires_consent))").eq("id", id).single();
+  const { data: s } = await sb.from("sessions").select("*, patients(*), sales(session_count, service_id, encounter_id, services(name, requires_consent))").eq("id", id).single();
   if (!s) notFound();
-  const staff = me?.role !== "hekim"; const open = staff && s.status === "planlandi";
-  const [{ data: vitals }, { data: consent }, { data: moves }, { data: an }, { data: nurses }, { data: products }, { data: kit }] = await Promise.all([
+  const staff = me?.role !== "hekim"; const open = staff && s.status === "planlandi"; const encId = s.sales.encounter_id;
+  const [{ data: vitals }, { data: consent }, { data: moves }, { data: an }, { data: nurses }, { data: products }, { data: kit }, { data: siblings }] = await Promise.all([
     sb.from("vitals").select("*").eq("session_id", id).order("measured_at"),
     sb.from("consents").select("*").eq("session_id", id).maybeSingle(),
     sb.from("stock_moves").select("*, products(name)").eq("session_id", id).order("created_at"),
@@ -23,75 +50,82 @@ export default async function Session({ params }: { params: Promise<{ id: string
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
     sb.from("product_stock").select("id, name, stock").eq("is_active", true).order("name"),
     sb.from("service_kits").select("quantity, products(name)").eq("service_id", s.sales.service_id),
+    sb.from("sessions").select("id, seq, status").eq("sale_id", s.sale_id).order("seq"),
   ]);
   const p = s.patients; const name = `${p.first_name} ${p.last_name}`;
-  const hasStart = !!vitals?.some(v => v.phase === "baslangic"); const hasEnd = !!vitals?.some(v => v.phase === "bitis");
+  const start = vitals?.filter(v => v.phase === "baslangic") ?? []; const mid = vitals?.filter(v => v.phase === "ara") ?? []; const end = vitals?.filter(v => v.phase === "bitis") ?? [];
   const needConsent = s.sales.services.requires_consent; const hasConsent = !!consent || !needConsent;
-  const canComplete = hasStart && hasEnd && hasConsent;
+  const canComplete = start.length > 0 && end.length > 0 && hasConsent;
   const local = s.scheduled_at ? new Date(new Date(s.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   const CONSENT_TEXT = `Ben, ${name}, bana uygulanacak "${s.sales.services.name}" işlemi hakkında bilgilendirildim. İşlemin amacı, olası riskleri ve alternatifleri anlatıldı. Sorularım yanıtlandı. İşlemin evde uygulanmasını kendi rızamla kabul ediyorum.`;
+  const steps = [{ ok: !!consent, label: "Onam", show: needConsent }, { ok: start.length > 0, label: "Başlangıç" }, { ok: (moves?.length ?? 0) > 0, label: "Malzeme" }, { ok: end.length > 0, label: "Bitiş" }].filter(x => x.show !== false);
+  const Section = ({ n, icon: Icon, title, ok, children }: { n: number; icon: any; title: string; ok: boolean; children: React.ReactNode }) => (
+    <Card title={<span className="flex items-center gap-2"><span className={`size-6 rounded-full text-xs font-bold flex items-center justify-center ${ok ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>{ok ? <Check className="size-3.5" /> : n}</span><Icon className="size-4 text-brand-600" />{title}</span>}>{children}</Card>
+  );
 
   return (
-    <div className="space-y-5 max-w-3xl">
-      <PageHeader back={`/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}`} action={<StatusBadge status={s.status} />} />
+    <div className="space-y-4 max-w-3xl">
+      <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}`} action={<StatusBadge status={s.status} />} />
+
+      {/* Seans gezgini */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">{siblings?.map(x => <Link key={x.id} href={`/seans/${x.id}`} aria-current={x.id === id ? "page" : undefined} className={`size-9 shrink-0 rounded-lg flex items-center justify-center text-sm font-bold border transition-colors ${x.id === id ? "bg-brand-600 border-brand-600 text-white" : x.status === "tamamlandi" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : x.status === "iptal" ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-200 text-slate-700"}`}>{x.seq}</Link>)}</div>
 
       <div className="grid grid-cols-2 gap-3">
-        <a href={`tel:${p.phone}`} className="card card-pad flex items-center gap-3 hover:bg-slate-50"><span className="size-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><Phone className="size-5" /></span><div className="min-w-0"><div className="text-xs text-slate-500">Ara</div><div className="font-semibold num truncate">{p.phone}</div></div></a>
-        <div className="card card-pad flex items-center gap-3"><span className="size-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><MapPin className="size-5" /></span><div className="min-w-0"><div className="text-xs text-slate-500">Adres</div><div className="font-semibold truncate">{p.address ?? "—"}</div></div></div>
+        <a href={`tel:${p.phone}`} className="card p-3 flex items-center gap-3 hover:bg-slate-50"><span className="size-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><Phone className="size-4" /></span><div className="min-w-0"><div className="text-[11px] text-slate-500">Ara</div><div className="text-sm font-semibold num truncate">{p.phone}</div></div></a>
+        <a href={p.address ? `https://maps.google.com/?q=${encodeURIComponent(p.address)}` : undefined} target="_blank" className="card p-3 flex items-center gap-3 hover:bg-slate-50"><span className="size-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><Navigation className="size-4" /></span><div className="min-w-0"><div className="text-[11px] text-slate-500">Adres</div><div className="text-sm font-semibold truncate">{p.address ?? "—"}</div></div></a>
       </div>
       {an?.allergies && <Alert tone="danger"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Alerji:</b> {an.allergies}</span></Alert>}
       {an?.medications && <Alert tone="info"><Pill className="size-4 mt-0.5 shrink-0" /><span><b>İlaçlar:</b> {an.medications}</span></Alert>}
 
-      <Card title="Planlama">
-        <div className="flex items-center gap-2 text-sm text-slate-600 mb-3"><CalendarClock className="size-4" />{s.scheduled_at ? dt(s.scheduled_at) : "Henüz planlanmadı"}</div>
-        {open && <form action={scheduleSession} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end"><input type="hidden" name="id" value={id} />
+      {open && <div className="card px-4 py-3 flex items-center justify-between gap-2">{steps.map((st, i) => <span key={st.label} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium ${st.ok ? "text-emerald-700" : "text-slate-500"}`}>{st.ok ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}{st.label}{i < steps.length - 1 && <span className="hidden sm:block w-6 h-px bg-slate-200 ml-2" />}</span>)}</div>}
+
+      <details className="card group" open={!s.scheduled_at}>
+        <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm"><CalendarClock className="size-4 text-slate-500" /><span className="flex-1">{s.scheduled_at ? dt(s.scheduled_at) : "Planlanmadı"}{s.nurse_id && nurses?.find(n => n.id === s.nurse_id) && <span className="text-slate-500"> · {nurses.find(n => n.id === s.nurse_id)!.full_name}</span>}</span>{open && <span className="text-brand-700 font-medium">Değiştir</span>}</summary>
+        {open && <form action={scheduleSession} className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end border-t border-slate-100 pt-3"><input type="hidden" name="id" value={id} />
           <Field label="Tarih & saat"><input name="scheduled_at" type="datetime-local" className="input" defaultValue={local} /></Field>
           <Field label="Hemşire"><select name="nurse_id" className="input" defaultValue={s.nurse_id ?? ""}><option value="">Seçiniz</option>{nurses?.map(n => <option key={n.id} value={n.id}>{n.full_name}</option>)}</select></Field>
           <button className="btn-secondary">Kaydet</button></form>}
-      </Card>
+      </details>
 
-      {staff && s.status === "planlandi" && <div className="card card-pad flex flex-wrap gap-x-5 gap-y-2"><Step ok={hasStart} label="Başlangıç vitali" /><Step ok={hasEnd} label="Bitiş vitali" />{needConsent && <Step ok={!!consent} label="Onam" />}<Step ok={!!moves?.length} label="Malzeme düşümü" /></div>}
-
-      <Card title={<span className="flex items-center gap-2"><Activity className="size-4 text-brand-600" />Vitaller</span>} flush>
-        {!!vitals?.length && <div className="overflow-x-auto"><table className="tbl"><thead><tr><th>Aşama</th><th>Saat</th><th>TA</th><th>Nabız</th><th>Ateş</th><th>SpO₂</th><th>KŞ</th></tr></thead>
-          <tbody>{vitals.map(v => <tr key={v.id} className="num"><td className="font-medium">{PHASE[v.phase]}</td><td>{new Date(v.measured_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</td><td>{v.bp_sys ?? "-"}/{v.bp_dia ?? "-"}</td><td>{v.pulse ?? "-"}</td><td>{v.temp ?? "-"}</td><td>{v.spo2 ?? "-"}</td><td>{v.glucose ?? "-"}</td></tr>)}</tbody></table></div>}
-        {!vitals?.length && !open && <p className="px-5 pb-5 text-sm text-slate-500">Ölçüm girilmemiş.</p>}
-        {open && <form action={addVital} className="px-4 sm:px-5 pb-4 sm:pb-5 pt-4 border-t border-slate-100 space-y-3"><input type="hidden" name="session_id" value={id} />
-          <Field label="Aşama"><select name="phase" className="input" defaultValue={!hasStart ? "baslangic" : !hasEnd ? "bitis" : "ara"}><option value="baslangic">Başlangıç</option><option value="ara">Ara ölçüm</option><option value="bitis">Bitiş</option></select></Field>
-          <div className="grid grid-cols-3 gap-2">
-            <Field label="Büyük TA"><input name="bp_sys" type="number" inputMode="numeric" className="input" placeholder="120" /></Field>
-            <Field label="Küçük TA"><input name="bp_dia" type="number" inputMode="numeric" className="input" placeholder="80" /></Field>
-            <Field label="Nabız"><input name="pulse" type="number" inputMode="numeric" className="input" placeholder="72" /></Field>
-            <Field label="Ateş °C"><input name="temp" type="number" step="0.1" inputMode="decimal" className="input" placeholder="36.5" /></Field>
-            <Field label="SpO₂ %"><input name="spo2" type="number" inputMode="numeric" className="input" placeholder="98" /></Field>
-            <Field label="Kan şekeri"><input name="glucose" type="number" inputMode="numeric" className="input" placeholder="100" /></Field>
-          </div>
-          <Field label="Not"><input name="notes" className="input" /></Field>
-          <button className="btn w-full"><Plus className="size-4" />Ölçüm Ekle</button></form>}
-      </Card>
-
-      {needConsent && <Card title={<span className="flex items-center gap-2"><FileSignature className="size-4 text-brand-600" />Onam Formu</span>}>
-        {consent ? <Alert tone="success"><CheckCircle2 className="size-4 mt-0.5 shrink-0" /><span><b>{consent.signer_name}</b> tarafından {dt(consent.signed_at)} tarihinde imzalandı.</span></Alert>
+      {needConsent && <Section n={1} icon={FileSignature} title="Onam" ok={!!consent}>
+        {consent ? <Alert tone="success"><CheckCircle2 className="size-4 mt-0.5 shrink-0" /><span><b>{consent.signer_name}</b> · {dt(consent.signed_at)}</span></Alert>
           : open ? <ConsentPad sessionId={id} defaultName={name} text={CONSENT_TEXT} /> : <p className="text-sm text-slate-500">Onam alınmadı.</p>}
+      </Section>}
+
+      <Section n={needConsent ? 2 : 1} icon={Activity} title="Başlangıç Vitali" ok={start.length > 0}>
+        {start.length > 0 && <div className="divide-rows">{start.map(v => <VitalRow key={v.id} v={v} open={open} sessionId={id} />)}</div>}
+        {open && start.length === 0 && <VitalForm sessionId={id} phase="baslangic" />}
+        {!open && start.length === 0 && <p className="text-sm text-slate-500">Ölçüm yok.</p>}
+      </Section>
+
+      <Section n={needConsent ? 3 : 2} icon={Package} title="Kullanılan Malzeme" ok={(moves?.length ?? 0) > 0}>
+        <div className="space-y-3">
+          {!!moves?.length && <ul className="divide-rows rounded-xl border border-slate-200">{moves.map((m: any) => <li key={m.id} className="flex items-center gap-3 px-3.5 py-2 text-sm"><span className="flex-1">{m.products.name}</span><span className="badge badge-slate num">× {-m.quantity}</span>{open && <form action={deleteStockMove.bind(null, m.id, id)}><button aria-label="Sil" className="btn-icon size-8 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}</li>)}</ul>}
+          {!moves?.length && !open && <p className="text-sm text-slate-500">Düşüm yapılmadı.</p>}
+          {open && !!kit?.length && !moves?.length && <form action={applyKit.bind(null, id)}><button className="btn w-full"><Package className="size-4" />Paket Düşüm Uygula</button><p className="hint text-center">{kit.map((k: any) => `${k.quantity} × ${k.products.name}`).join(", ")}</p></form>}
+          {open && <form action={addStockMove} className="grid grid-cols-[1fr_4.5rem_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
+            <Field label="Ürün ekle"><select name="product_id" className="input" required><option value="">Seçiniz</option>{products?.map(x => <option key={x.id} value={x.id}>{x.name} ({x.stock})</option>)}</select></Field>
+            <Field label="Adet"><input name="quantity" type="number" min={1} inputMode="numeric" defaultValue={1} className="input px-2" /></Field>
+            <button className="btn-secondary" aria-label="Ekle"><Plus className="size-4" /></button></form>}
+        </div>
+      </Section>
+
+      {(open || mid.length > 0) && <Card title={<span className="flex items-center gap-2 text-slate-600"><Activity className="size-4" />Ara Ölçümler <span className="text-xs font-normal text-slate-400">(isteğe bağlı)</span></span>}>
+        {mid.length > 0 && <div className="divide-rows mb-3">{mid.map(v => <VitalRow key={v.id} v={v} open={open} sessionId={id} />)}</div>}
+        {open && <details><summary className="btn-ghost btn-sm -ml-3 cursor-pointer"><Plus className="size-4" />Ara ölçüm ekle</summary><div className="mt-3"><VitalForm sessionId={id} phase="ara" /></div></details>}
       </Card>}
 
-      <Card title={<span className="flex items-center gap-2"><Package className="size-4 text-brand-600" />Kullanılan Malzeme</span>} flush>
-        {!!moves?.length && <ul className="divide-rows">{moves.map((m: any) => <li key={m.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5 text-sm"><span className="flex-1">{m.products.name}{m.notes && <span className="text-xs text-slate-400"> · {m.notes}</span>}</span><span className="badge badge-slate num">× {-m.quantity}</span>
-          {open && <form action={deleteStockMove.bind(null, m.id, id)}><button aria-label="Sil" className="btn-icon size-9 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}</li>)}</ul>}
-        {!moves?.length && !open && <p className="px-5 pb-5 text-sm text-slate-500">Düşüm yapılmadı.</p>}
-        {open && <div className={`px-4 sm:px-5 pb-4 sm:pb-5 pt-4 space-y-3 ${moves?.length ? "border-t border-slate-100" : ""}`}>
-          {!!kit?.length && !moves?.length && <form action={applyKit.bind(null, id)}><button className="btn w-full"><Package className="size-4" />Paket Düşüm Uygula</button><p className="hint text-center">{kit.map((k: any) => `${k.quantity} × ${k.products.name}`).join(", ")}</p></form>}
-          <form action={addStockMove} className="grid grid-cols-[1fr_5rem_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
-            <Field label="Ürün"><select name="product_id" className="input" required><option value="">Seçiniz</option>{products?.map(x => <option key={x.id} value={x.id}>{x.name} ({x.stock})</option>)}</select></Field>
-            <Field label="Adet"><input name="quantity" type="number" min={1} inputMode="numeric" defaultValue={1} className="input" /></Field>
-            <button className="btn-secondary" aria-label="Ekle"><Plus className="size-4" /></button></form></div>}
-      </Card>
+      <Section n={needConsent ? 4 : 3} icon={Activity} title="Bitiş Vitali" ok={end.length > 0}>
+        {end.length > 0 && <div className="divide-rows">{end.map(v => <VitalRow key={v.id} v={v} open={open} sessionId={id} />)}</div>}
+        {open && end.length === 0 && <VitalForm sessionId={id} phase="bitis" />}
+        {!open && end.length === 0 && <p className="text-sm text-slate-500">Ölçüm yok.</p>}
+      </Section>
 
       {open && <div className="card card-pad flex gap-2">
-        <form action={setSessionStatus.bind(null, id, "iptal", p.id)}><button className="btn-danger"><XCircle className="size-4" /><span className="hidden sm:inline">İptal</span></button></form>
-        <form action={setSessionStatus.bind(null, id, "tamamlandi", p.id)} className="flex-1"><button className="btn w-full" disabled={!canComplete} title={canComplete ? "" : "Başlangıç + bitiş vitali ve onam gerekli"}><Check className="size-4" />Seansı Tamamla</button></form>
+        <form action={setSessionStatus.bind(null, id, "iptal", encId)}><button className="btn-danger"><XCircle className="size-4" /><span className="hidden sm:inline">İptal</span></button></form>
+        <form action={setSessionStatus.bind(null, id, "tamamlandi", encId)} className="flex-1"><button className="btn w-full" disabled={!canComplete}><Check className="size-4" />Seansı Tamamla</button>{!canComplete && <p className="hint text-center">Tamamlamak için: {[needConsent && !consent && "onam", !start.length && "başlangıç vitali", !end.length && "bitiş vitali"].filter(Boolean).join(", ")}</p>}</form>
       </div>}
-      {staff && s.status !== "planlandi" && <form action={setSessionStatus.bind(null, id, "planlandi", p.id)}><button className="btn-secondary w-full"><RotateCcw className="size-4" />Seansı Yeniden Aç</button></form>}
+      {staff && s.status !== "planlandi" && <form action={setSessionStatus.bind(null, id, "planlandi", encId)}><button className="btn-secondary w-full"><RotateCcw className="size-4" />Seansı Yeniden Aç</button></form>}
     </div>
   );
 }

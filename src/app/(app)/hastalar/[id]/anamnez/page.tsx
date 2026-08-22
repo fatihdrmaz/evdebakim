@@ -2,14 +2,14 @@ import { createClient } from "@/lib/supabase/server";
 import { saveAnamnesis } from "@/lib/actions";
 import { PageHeader, Card, Field } from "@/components/ui";
 
-export default async function Anamnez({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; const sb = await createClient();
+export default async function Anamnez({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ back?: string }> }) {
+  const { id } = await params; const { back } = await searchParams; const sb = await createClient();
   const [{ data: a }, { data: p }] = await Promise.all([sb.from("anamnesis").select("*").eq("patient_id", id).maybeSingle(), sb.from("patients").select("first_name,last_name").eq("id", id).single()]);
   const T = (n: string, l: string, v: any, ph?: string) => <Field label={l}><textarea name={n} rows={2} className="input" defaultValue={v ?? ""} placeholder={ph} /></Field>;
   return (
     <form action={saveAnamnesis} className="max-w-3xl space-y-4">
-      <input type="hidden" name="patient_id" value={id} />
-      <PageHeader title="Anamnez" subtitle={p ? `${p.first_name} ${p.last_name}` : undefined} back={`/hastalar/${id}`} />
+      <input type="hidden" name="patient_id" value={id} />{back && <input type="hidden" name="back" value={back} />}
+      <PageHeader title="Anamnez" subtitle={p ? `${p.first_name} ${p.last_name}` : undefined} back={back ?? `/hastalar/${id}`} />
       <Card title="Ölçümler">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Boy (cm)"><input name="height_cm" type="number" inputMode="decimal" className="input" defaultValue={a?.height_cm ?? ""} /></Field>
