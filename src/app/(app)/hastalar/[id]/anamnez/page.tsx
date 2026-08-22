@@ -1,29 +1,36 @@
 import { createClient } from "@/lib/supabase/server";
 import { saveAnamnesis } from "@/lib/actions";
-const T = (n: string, l: string, v: any) => <div><label className="label">{l}</label><textarea name={n} rows={2} className="input" defaultValue={v ?? ""} /></div>;
+import { PageHeader, Card, Field } from "@/components/ui";
+
 export default async function Anamnez({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const sb = await createClient();
-  const { data: a } = await sb.from("anamnesis").select("*").eq("patient_id", id).maybeSingle();
+  const [{ data: a }, { data: p }] = await Promise.all([sb.from("anamnesis").select("*").eq("patient_id", id).maybeSingle(), sb.from("patients").select("first_name,last_name").eq("id", id).single()]);
+  const T = (n: string, l: string, v: any, ph?: string) => <Field label={l}><textarea name={n} rows={2} className="input" defaultValue={v ?? ""} placeholder={ph} /></Field>;
   return (
-    <form action={saveAnamnesis} className="card space-y-3">
+    <form action={saveAnamnesis} className="max-w-3xl space-y-4">
       <input type="hidden" name="patient_id" value={id} />
-      <h1 className="text-xl font-semibold">Anamnez</h1>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className="label">Boy (cm)</label><input name="height_cm" type="number" inputMode="decimal" className="input" defaultValue={a?.height_cm ?? ""} /></div>
-        <div><label className="label">Kilo (kg)</label><input name="weight_kg" type="number" step="0.1" inputMode="decimal" className="input" defaultValue={a?.weight_kg ?? ""} /></div>
-      </div>
-      {T("allergies", "Alerjiler", a?.allergies)}
-      {T("chronic_diseases", "Kronik hastalıklar", a?.chronic_diseases)}
-      {T("medications", "Kullandığı ilaçlar", a?.medications)}
-      {T("surgeries", "Geçirdiği ameliyatlar", a?.surgeries)}
-      {T("clinical_history", "Klinik öykü", a?.clinical_history)}
-      {T("special_conditions", "Özel durumlar", a?.special_conditions)}
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1"><input type="checkbox" name="smoking" defaultChecked={a?.smoking} /> Sigara</label>
-        <label className="flex items-center gap-1"><input type="checkbox" name="alcohol" defaultChecked={a?.alcohol} /> Alkol</label>
-        <label className="flex items-center gap-1"><input type="checkbox" name="pregnancy" defaultChecked={a?.pregnancy} /> Gebelik</label>
-      </div>
-      <button className="btn w-full">Kaydet</button>
+      <PageHeader title="Anamnez" subtitle={p ? `${p.first_name} ${p.last_name}` : undefined} back={`/hastalar/${id}`} />
+      <Card title="Ölçümler">
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Boy (cm)"><input name="height_cm" type="number" inputMode="decimal" className="input" defaultValue={a?.height_cm ?? ""} /></Field>
+          <Field label="Kilo (kg)"><input name="weight_kg" type="number" step="0.1" inputMode="decimal" className="input" defaultValue={a?.weight_kg ?? ""} /></Field>
+        </div>
+      </Card>
+      <Card title="Tıbbi Öykü">
+        <div className="space-y-4">
+          {T("allergies", "Alerjiler", a?.allergies, "İlaç, gıda, lateks… Yoksa boş bırakın")}
+          {T("chronic_diseases", "Kronik hastalıklar", a?.chronic_diseases, "Hipertansiyon, diyabet…")}
+          {T("medications", "Kullandığı ilaçlar", a?.medications, "İlaç adı ve dozu")}
+          {T("surgeries", "Geçirdiği ameliyatlar", a?.surgeries)}
+          {T("clinical_history", "Klinik öykü", a?.clinical_history)}
+          {T("special_conditions", "Özel durumlar", a?.special_conditions, "Hareket kısıtı, pacemaker, vb.")}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            {[["smoking", "Sigara", a?.smoking], ["alcohol", "Alkol", a?.alcohol], ["pregnancy", "Gebelik", a?.pregnancy]].map(([n, l, v]) => (
+              <label key={n as string} className="flex items-center gap-2 min-h-11 cursor-pointer"><input type="checkbox" name={n as string} defaultChecked={!!v} className="size-5 rounded accent-brand-600" />{l}</label>))}
+          </div>
+        </div>
+      </Card>
+      <button className="btn w-full sm:w-auto sm:min-w-40">Kaydet</button>
     </form>
   );
 }

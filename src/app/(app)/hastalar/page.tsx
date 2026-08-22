@@ -1,20 +1,25 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { Plus, Search, Users } from "lucide-react";
+import { createClient, getProfile } from "@/lib/supabase/server";
+import { PageHeader, Card, Avatar, Empty, ListRow } from "@/components/ui";
+
 export default async function Patients({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams; const sb = await createClient();
+  const { q } = await searchParams; const sb = await createClient(); const me = await getProfile();
   let qry = sb.from("patients").select("id, first_name, last_name, phone, doctors(full_name)").order("created_at", { ascending: false }).limit(100);
   if (q) qry = qry.or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%`);
   const { data } = await qry;
   return (
-    <div className="space-y-4">
-      <div className="flex gap-2 items-center"><h1 className="text-xl font-semibold flex-1">Hastalar</h1><Link href="/hastalar/yeni" className="btn">+ Yeni Hasta</Link></div>
-      <form><input name="q" defaultValue={q} placeholder="Ad, soyad veya telefon ara…" className="input" /></form>
-      <ul className="card divide-y p-0">{data?.map((p: any) => (
-        <li key={p.id}><Link href={`/hastalar/${p.id}`} className="flex justify-between items-center px-4 py-3">
-          <div><div className="font-medium">{p.first_name} {p.last_name}</div><div className="text-xs text-slate-500">{p.phone}{p.doctors && ` · Dr. ${p.doctors.full_name}`}</div></div><span className="text-slate-400">›</span>
-        </Link></li>))}
-        {!data?.length && <li className="p-4 text-sm text-slate-500">Hasta bulunamadı.</li>}
-      </ul>
+    <div>
+      <PageHeader title="Hastalar" subtitle={`${data?.length ?? 0} kayıt`} action={me?.role !== "hekim" && <Link href="/hastalar/yeni" className="btn"><Plus className="size-4" /><span className="hidden sm:inline">Yeni Hasta</span><span className="sm:hidden">Yeni</span></Link>} />
+      <form className="relative mb-4" role="search">
+        <Search className="size-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input name="q" defaultValue={q} placeholder="Ad, soyad veya telefon ara…" className="input pl-11" aria-label="Hasta ara" />
+      </form>
+      <Card flush>
+        {!data?.length ? <Empty icon={Users} title={q ? "Sonuç bulunamadı" : "Henüz hasta yok"} hint={q ? "Farklı bir arama deneyin." : "İlk hastanızı ekleyerek başlayın."} action={!q && <Link href="/hastalar/yeni" className="btn"><Plus className="size-4" />Yeni Hasta</Link>} /> : (
+          <div className="divide-rows">{data.map((p: any) => (
+            <ListRow key={p.id} href={`/hastalar/${p.id}`} left={<Avatar name={`${p.first_name} ${p.last_name}`} />} title={`${p.first_name} ${p.last_name}`} subtitle={<>{p.phone}{p.doctors && <span className="text-slate-400"> · {p.doctors.full_name}</span>}</>} />))}</div>)}
+      </Card>
     </div>
   );
 }

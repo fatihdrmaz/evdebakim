@@ -1,7 +1,10 @@
 import Link from "next/link";
+import { Plus, Package, SlidersHorizontal, PackagePlus, History, FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { CAT, d } from "@/lib/format";
 import { addStockMove, saveProduct } from "@/lib/actions";
+import { PageHeader, Card, Field, Empty } from "@/components/ui";
+
 export default async function Stock() {
   const sb = await createClient();
   const [{ data: products }, { data: purchases }, { data: moves }] = await Promise.all([
@@ -9,24 +12,51 @@ export default async function Stock() {
     sb.from("purchases").select("id, supplier, invoice_no, invoice_date, total, purchase_items(count)").order("invoice_date", { ascending: false }).limit(10),
     sb.from("stock_moves").select("id, quantity, type, created_at, notes, products(name), sessions(patients(first_name,last_name))").order("created_at", { ascending: false }).limit(30),
   ]);
-  const TYPE: Record<string, string> = { alis: "Alış", seans_dusum: "Seans", manuel_dusum: "Manuel düşüm", duzeltme: "Düzeltme" };
+  const TYPE: Record<string, string> = { alis: "Alış", seans_dusum: "Seans", manuel_dusum: "Düşüm", duzeltme: "Düzeltme" };
+  const lowCount = (products ?? []).filter(p => p.is_active && p.stock <= p.min_stock).length;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2"><h1 className="text-xl font-semibold flex-1">Stok</h1><Link href="/stok/alis" className="btn">+ Alış Faturası</Link></div>
-      <section className="card p-0 overflow-x-auto"><table className="w-full text-sm"><thead className="text-xs text-slate-500"><tr><th className="text-left p-3">Ürün</th><th className="text-left">Kategori</th><th className="text-right p-3">Stok</th></tr></thead>
-        <tbody>{products?.map(p => <tr key={p.id} className={`border-t ${!p.is_active ? "opacity-50" : ""}`}><td className="p-3">{p.name}</td><td>{CAT[p.category]}</td><td className={`text-right p-3 font-semibold ${p.stock <= p.min_stock ? "text-red-600" : ""}`}>{p.stock}</td></tr>)}</tbody></table></section>
-      <details className="card"><summary className="cursor-pointer font-medium">Manuel düşüm / düzeltme</summary>
-        <form action={addStockMove} className="grid grid-cols-2 gap-2 mt-3">
-          <select name="product_id" className="input col-span-2" required><option value="">Ürün…</option>{products?.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock})</option>)}</select>
-          <select name="type" className="input"><option value="manuel_dusum">Düşüm (fire, zayi)</option><option value="duzeltme">Düzeltme (+/- sayım)</option></select>
-          <input name="quantity" type="number" className="input" placeholder="Adet" required />
-          <input name="notes" className="input col-span-2" placeholder="Açıklama" /><button className="btn col-span-2">Kaydet</button></form></details>
-      <details className="card"><summary className="cursor-pointer font-medium">Yeni ürün ekle</summary>
-        <form action={saveProduct} className="grid grid-cols-2 gap-2 mt-3"><input name="name" className="input col-span-2" placeholder="Ürün adı" required />
-          <select name="category" className="input"><option value="serum">Serum</option><option value="ilac">İlaç</option><option value="sarf">Sarf</option></select>
-          <input name="min_stock" type="number" className="input" placeholder="Kritik stok" defaultValue={5} /><button className="btn col-span-2">Ekle</button></form></details>
-      <section className="card"><h2 className="font-medium mb-2">Son Alışlar</h2><ul className="divide-y text-sm">{purchases?.map((p: any) => <li key={p.id} className="flex justify-between py-2"><span>{d(p.invoice_date)} · {p.supplier ?? "—"} {p.invoice_no && `· ${p.invoice_no}`}</span><span className="text-slate-500">{p.purchase_items[0]?.count} kalem</span></li>)}{!purchases?.length && <li className="py-2 text-slate-500">Alış yok.</li>}</ul></section>
-      <section className="card"><h2 className="font-medium mb-2">Son Hareketler</h2><ul className="divide-y text-sm">{moves?.map((m: any) => <li key={m.id} className="flex justify-between py-1.5"><span>{m.products.name} <span className="text-xs text-slate-500">{TYPE[m.type]}{m.sessions?.patients && ` · ${m.sessions.patients.first_name} ${m.sessions.patients.last_name}`}</span></span><b className={m.quantity < 0 ? "text-red-600" : "text-green-700"}>{m.quantity > 0 ? "+" : ""}{m.quantity}</b></li>)}</ul></section>
+    <div className="space-y-5">
+      <PageHeader title="Stok" subtitle={lowCount ? `${lowCount} ürün kritik seviyede` : "Tüm ürünler yeterli seviyede"} action={<Link href="/stok/alis" className="btn"><Plus className="size-4" /><span className="hidden sm:inline">Alış Faturası</span><span className="sm:hidden">Alış</span></Link>} />
+
+      <Card title="Ürünler" flush>
+        {!products?.length ? <Empty icon={Package} title="Ürün yok" /> : (
+          <div className="overflow-x-auto"><table className="tbl"><thead><tr><th>Ürün</th><th>Kategori</th><th className="text-right">Stok</th></tr></thead>
+            <tbody>{products.map(p => <tr key={p.id} className={!p.is_active ? "opacity-50" : ""}><td className="font-medium">{p.name}</td><td><span className="badge badge-slate">{CAT[p.category]}</span></td>
+              <td className="text-right"><span className={`font-bold num ${p.stock <= p.min_stock ? "text-red-600" : "text-slate-900"}`}>{p.stock}</span><span className="text-xs text-slate-400 ml-1">/ min {p.min_stock}</span></td></tr>)}</tbody></table></div>)}
+      </Card>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card title={<span className="flex items-center gap-2"><SlidersHorizontal className="size-4 text-brand-600" />Manuel Düşüm / Düzeltme</span>}>
+          <form action={addStockMove} className="space-y-3">
+            <Field label="Ürün" required><select name="product_id" className="input" required><option value="">Seçiniz</option>{products?.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock})</option>)}</select></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="İşlem"><select name="type" className="input"><option value="manuel_dusum">Düşüm (fire, zayi)</option><option value="duzeltme">Düzeltme (+/−)</option></select></Field>
+              <Field label="Adet" required><input name="quantity" type="number" inputMode="numeric" className="input" required /></Field>
+            </div>
+            <Field label="Açıklama"><input name="notes" className="input" /></Field>
+            <button className="btn-secondary w-full">Kaydet</button>
+          </form>
+        </Card>
+        <Card title={<span className="flex items-center gap-2"><PackagePlus className="size-4 text-brand-600" />Yeni Ürün</span>}>
+          <form action={saveProduct} className="space-y-3">
+            <Field label="Ürün adı" required><input name="name" className="input" required /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Kategori"><select name="category" className="input"><option value="serum">Serum</option><option value="ilac">İlaç</option><option value="sarf">Sarf</option></select></Field>
+              <Field label="Kritik stok"><input name="min_stock" type="number" inputMode="numeric" className="input" defaultValue={5} /></Field>
+            </div>
+            <button className="btn-secondary w-full"><Plus className="size-4" />Ürün Ekle</button>
+          </form>
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card title={<span className="flex items-center gap-2"><FileText className="size-4 text-brand-600" />Son Alışlar</span>} flush>
+          {!purchases?.length ? <Empty icon={FileText} title="Alış kaydı yok" /> : <ul className="divide-rows">{purchases.map((p: any) => <li key={p.id} className="flex items-center justify-between px-4 sm:px-5 py-3 text-sm"><div><div className="font-medium">{p.supplier ?? "Tedarikçi belirtilmedi"}</div><div className="text-xs text-slate-500">{d(p.invoice_date)}{p.invoice_no && ` · ${p.invoice_no}`}</div></div><span className="badge badge-slate">{p.purchase_items[0]?.count} kalem</span></li>)}</ul>}
+        </Card>
+        <Card title={<span className="flex items-center gap-2"><History className="size-4 text-brand-600" />Son Hareketler</span>} flush>
+          {!moves?.length ? <Empty icon={History} title="Hareket yok" /> : <ul className="divide-rows">{moves.map((m: any) => <li key={m.id} className="flex items-center justify-between px-4 sm:px-5 py-2.5 text-sm"><div className="min-w-0"><div className="font-medium truncate">{m.products.name}</div><div className="text-xs text-slate-500 truncate">{TYPE[m.type]}{m.sessions?.patients && ` · ${m.sessions.patients.first_name} ${m.sessions.patients.last_name}`}{m.notes && ` · ${m.notes}`}</div></div><b className={`num ${m.quantity < 0 ? "text-red-600" : "text-emerald-700"}`}>{m.quantity > 0 ? "+" : ""}{m.quantity}</b></li>)}</ul>}
+        </Card>
+      </div>
     </div>
   );
 }
