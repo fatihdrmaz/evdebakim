@@ -165,6 +165,16 @@ export async function addVital(fd: FormData) {
   revalidatePath(`/seans/${session_id}`);
 }
 
+export async function updateVital(fd: FormData) {
+  const sb = await createClient();
+  const id = s(fd, "id")!; const session_id = s(fd, "session_id")!;
+  const { error } = await sb.from("vitals").update({
+    bp_sys: n(fd, "bp_sys"), bp_dia: n(fd, "bp_dia"), pulse: n(fd, "pulse"), temp: n(fd, "temp"), spo2: n(fd, "spo2"), glucose: n(fd, "glucose"), notes: s(fd, "notes"),
+  }).eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/seans/${session_id}`);
+}
+
 export async function deleteVital(id: string, session_id: string) {
   const sb = await createClient();
   await sb.from("vitals").delete().eq("id", id);
@@ -192,6 +202,13 @@ export async function deleteStockMove(id: string, session_id?: string) {
   const sb = await createClient();
   await sb.from("stock_moves").delete().eq("id", id);
   if (session_id) revalidatePath(`/seans/${session_id}`); revalidatePath("/stok");
+}
+
+export async function deleteConsent(session_id: string, signature_path: string) {
+  const sb = await createClient();
+  await sb.storage.from("consents").remove([signature_path]);
+  await sb.from("consents").delete().eq("session_id", session_id);
+  revalidatePath(`/seans/${session_id}`);
 }
 
 export async function saveConsent(session_id: string, dataUrl: string, signer_name: string, consent_text: string) {

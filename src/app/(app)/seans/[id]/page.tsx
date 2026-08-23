@@ -1,26 +1,34 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
-import { addVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes } from "@/lib/actions";
+import { addVital, updateVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
 
 const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
 
+function VitalInputs({ v }: { v?: any }) {
+  return (
+    <>
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="Büyük TA"><input name="bp_sys" type="number" inputMode="numeric" className="input px-3" placeholder="120" defaultValue={v?.bp_sys ?? ""} /></Field>
+        <Field label="Küçük TA"><input name="bp_dia" type="number" inputMode="numeric" className="input px-3" placeholder="80" defaultValue={v?.bp_dia ?? ""} /></Field>
+        <Field label="Nabız"><input name="pulse" type="number" inputMode="numeric" className="input px-3" placeholder="72" defaultValue={v?.pulse ?? ""} /></Field>
+        <Field label="Ateş °C"><input name="temp" type="number" step="0.1" inputMode="decimal" className="input px-3" placeholder="36.5" defaultValue={v?.temp ?? ""} /></Field>
+        <Field label="SpO₂ %"><input name="spo2" type="number" inputMode="numeric" className="input px-3" placeholder="98" defaultValue={v?.spo2 ?? ""} /></Field>
+        <Field label="Kan şekeri"><input name="glucose" type="number" inputMode="numeric" className="input px-3" placeholder="100" defaultValue={v?.glucose ?? ""} /></Field>
+      </div>
+      <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" defaultValue={v?.notes ?? ""} /></Field>
+    </>
+  );
+}
+
 function VitalForm({ sessionId, phase }: { sessionId: string; phase: string }) {
   return (
     <form action={addVital} className="space-y-3"><input type="hidden" name="session_id" value={sessionId} /><input type="hidden" name="phase" value={phase} />
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="Büyük TA"><input name="bp_sys" type="number" inputMode="numeric" className="input px-3" placeholder="120" /></Field>
-        <Field label="Küçük TA"><input name="bp_dia" type="number" inputMode="numeric" className="input px-3" placeholder="80" /></Field>
-        <Field label="Nabız"><input name="pulse" type="number" inputMode="numeric" className="input px-3" placeholder="72" /></Field>
-        <Field label="Ateş °C"><input name="temp" type="number" step="0.1" inputMode="decimal" className="input px-3" placeholder="36.5" /></Field>
-        <Field label="SpO₂ %"><input name="spo2" type="number" inputMode="numeric" className="input px-3" placeholder="98" /></Field>
-        <Field label="Kan şekeri"><input name="glucose" type="number" inputMode="numeric" className="input px-3" placeholder="100" /></Field>
-      </div>
-      <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
+      <VitalInputs />
       <button className="btn w-full"><Plus className="size-4" />{PHASE[phase]} Ölçümünü Kaydet</button>
     </form>
   );
@@ -28,12 +36,25 @@ function VitalForm({ sessionId, phase }: { sessionId: string; phase: string }) {
 
 function VitalRow({ v, open, sessionId }: { v: any; open: boolean; sessionId: string }) {
   const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
-  return (
-    <div className="flex items-start gap-3 py-2.5">
+  const summary = (
+    <div className="flex items-start gap-3 flex-1 min-w-0">
       <div className="w-14 shrink-0 text-xs"><div className="font-semibold">{PHASE[v.phase]}</div><div className="text-slate-500 num">{new Date(v.measured_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</div></div>
       <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
-      {open && <form action={deleteVital.bind(null, v.id, sessionId)}><button aria-label="Sil" className="btn-icon size-8 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}
     </div>
+  );
+  if (!open) return <div className="flex items-start gap-3 py-2.5">{summary}</div>;
+  return (
+    <details>
+      <summary className="flex items-start gap-3 py-2.5 cursor-pointer list-none">{summary}<Pencil className="size-4 text-slate-400 shrink-0 mt-0.5" /></summary>
+      <div className="pl-[3.75rem] pr-1 pb-3 space-y-3">
+        <form action={updateVital} className="space-y-3">
+          <input type="hidden" name="id" value={v.id} /><input type="hidden" name="session_id" value={sessionId} />
+          <VitalInputs v={v} />
+          <button className="btn-secondary w-full">Kaydet</button>
+        </form>
+        <form action={deleteVital.bind(null, v.id, sessionId)}><button className="btn-danger w-full"><Trash2 className="size-4" />Sil</button></form>
+      </div>
+    </details>
   );
 }
 
@@ -104,6 +125,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
             {consentUrl && <a href={consentUrl} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-slate-200 overflow-hidden hover:border-brand-300 transition-colors">
               <img src={consentUrl} alt="Onam imzası" className="w-full max-h-40 object-contain bg-white" />
             </a>}
+            {open && <form action={deleteConsent.bind(null, id, consent.signature_path)}><button className="btn-ghost btn-sm text-red-600 -ml-3"><Trash2 className="size-4" />Sil ve Yeniden Al</button></form>}
           </div>
         ) : open ? <ConsentPad sessionId={id} defaultName={name} text={CONSENT_TEXT} /> : <p className="text-sm text-slate-500">Onam alınmadı.</p>}
       </Section>}
