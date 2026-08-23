@@ -147,6 +147,14 @@ export async function setSessionStatus(id: string, status: string, encounter_id?
   if (status === "tamamlandi" && encounter_id) redirect(`/muayene/${encounter_id}`);
 }
 
+export async function saveSessionNotes(fd: FormData) {
+  const sb = await createClient();
+  const id = s(fd, "id")!;
+  const { error } = await sb.from("sessions").update({ notes: s(fd, "notes") }).eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/seans/${id}`);
+}
+
 export async function addVital(fd: FormData) {
   const sb = await createClient();
   const session_id = s(fd, "session_id")!;

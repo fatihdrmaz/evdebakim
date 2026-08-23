@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
-import { addVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus } from "@/lib/actions";
+import { addVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
 
@@ -60,13 +60,21 @@ export default async function Session({ params }: { params: Promise<{ id: string
   const local = s.scheduled_at ? new Date(new Date(s.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
   const CONSENT_TEXT = `Ben, ${name}, bana uygulanacak "${s.sales.services.name}" işlemi hakkında bilgilendirildim. İşlemin amacı, olası riskleri ve alternatifleri anlatıldı. Sorularım yanıtlandı. İşlemin evde uygulanmasını kendi rızamla kabul ediyorum.`;
   const steps = [{ ok: !!consent, label: "Onam", show: needConsent }, { ok: start.length > 0, label: "Başlangıç" }, { ok: (moves?.length ?? 0) > 0, label: "Malzeme" }, { ok: end.length > 0, label: "Bitiş" }].filter(x => x.show !== false);
+  const exitTime = s.completed_at ? new Date(s.completed_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : null;
   const Section = ({ n, icon: Icon, title, ok, children }: { n: number; icon: any; title: string; ok: boolean; children: React.ReactNode }) => (
-    <Card title={<span className="flex items-center gap-2"><span className={`size-6 rounded-full text-xs font-bold flex items-center justify-center ${ok ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>{ok ? <Check className="size-3.5" /> : n}</span><Icon className="size-4 text-brand-600" />{title}</span>}>{children}</Card>
+    <details className="card" open={!ok}>
+      <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer">
+        <span className={`size-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${ok ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>{ok ? <Check className="size-3.5" /> : n}</span>
+        <Icon className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">{title}</span>
+        {ok && <span className="text-sm font-medium text-emerald-700 shrink-0">Tamamlandı</span>}
+      </summary>
+      <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4">{children}</div>
+    </details>
   );
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}`}
+      <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}${exitTime ? ` · Çıkış ${exitTime}` : ""}`}
         action={<div className="flex items-center gap-2"><Link href={`/hastalar/${p.id}/anamnez?back=/seans/${id}`} aria-label="Anamnez" className="btn-icon"><ClipboardList className="size-5" /></Link><StatusBadge status={s.status} /></div>} />
 
       {/* Seans gezgini */}
@@ -123,7 +131,17 @@ export default async function Session({ params }: { params: Promise<{ id: string
         {open && <details><summary className="btn-ghost btn-sm -ml-3 cursor-pointer"><Plus className="size-4" />Ara ölçüm ekle</summary><div className="mt-3"><VitalForm sessionId={id} phase="ara" /></div></details>}
       </Card>}
 
-      <Section n={needConsent ? 4 : 3} icon={Activity} title="Bitiş Vitali" ok={end.length > 0}>
+      <Section n={needConsent ? 4 : 3} icon={NotebookPen} title="Hemşire Gözlem Notu" ok={!!s.notes}>
+        {s.notes && <p className="text-sm whitespace-pre-wrap mb-3">{s.notes}</p>}
+        {open ? (
+          <form action={saveSessionNotes} className="space-y-3"><input type="hidden" name="id" value={id} />
+            <textarea name="notes" rows={3} className="input" defaultValue={s.notes ?? ""} placeholder="Hastanın genel durumu, gözlemler, uygulama sırasında yaşananlar…" />
+            <button className="btn-secondary">Kaydet</button>
+          </form>
+        ) : !s.notes && <p className="text-sm text-slate-500">Not girilmedi.</p>}
+      </Section>
+
+      <Section n={needConsent ? 5 : 4} icon={Activity} title="Bitiş Vitali" ok={end.length > 0}>
         {end.length > 0 && <div className="divide-rows">{end.map(v => <VitalRow key={v.id} v={v} open={open} sessionId={id} />)}</div>}
         {open && end.length === 0 && <VitalForm sessionId={id} phase="bitis" />}
         {!open && end.length === 0 && <p className="text-sm text-slate-500">Ölçüm yok.</p>}
