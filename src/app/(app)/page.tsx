@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { CalendarDays, CalendarX, Wallet, PackageMinus, Clock, MapPin, ArrowRight, CheckCircle2, Phone, Navigation, FileText } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { tl } from "@/lib/format";
+import { tl, t, todayRangeIstanbul } from "@/lib/format";
 import { Card, Stat, StatusBadge, Avatar, Empty, ListRow } from "@/components/ui";
 
 export default async function Home() {
   const sb = await createClient(); const p = await getProfile();
   const staff = p?.role !== "hekim";
-  const start = new Date(); start.setHours(0, 0, 0, 0); const end = new Date(start); end.setDate(end.getDate() + 1);
+  const { start, end } = todayRangeIstanbul();
   const [{ data: today }, { data: unplanned }, balRes, lowRes] = await Promise.all([
     sb.from("sessions").select("id, seq, scheduled_at, status, patients(first_name,last_name,phone,address), sales(session_count, services(name), encounter_id)").gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at"),
     sb.from("sessions").select("id, seq, patients(first_name,last_name), sales(session_count, services(name))").is("scheduled_at", null).eq("status", "planlandi").limit(20),
@@ -45,7 +45,7 @@ export default async function Home() {
           <div className="divide-rows">{today.map((x: any) => (
             <div key={x.id} className="row px-2 sm:px-3">
               <Link href={`/seans/${x.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="flex flex-col items-center w-12 shrink-0"><span className="text-sm font-bold num">{new Date(x.scheduled_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                <div className="flex flex-col items-center w-12 shrink-0"><span className="text-sm font-bold num">{t(x.scheduled_at)}</span></div>
                 <Avatar name={`${x.patients.first_name} ${x.patients.last_name}`} />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</div>

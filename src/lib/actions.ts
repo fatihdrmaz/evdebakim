@@ -2,6 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { trToISO } from "@/lib/format";
 
 const s = (fd: FormData, k: string) => { const v = fd.get(k); return v === null || v === "" ? null : String(v); };
 const n = (fd: FormData, k: string) => { const v = s(fd, k); return v === null ? null : Number(v.replace(",", ".")); };
@@ -112,7 +113,7 @@ export async function deletePrescription(id: string, encounter_id: string, file_
 export async function scheduleSession(fd: FormData) {
   const sb = await createClient();
   const id = s(fd, "id")!;
-  const { error } = await sb.from("sessions").update({ scheduled_at: s(fd, "scheduled_at") ? new Date(s(fd, "scheduled_at")!).toISOString() : null, nurse_id: s(fd, "nurse_id") }).eq("id", id);
+  const { error } = await sb.from("sessions").update({ scheduled_at: s(fd, "scheduled_at") ? trToISO(s(fd, "scheduled_at")!) : null, nurse_id: s(fd, "nurse_id") }).eq("id", id);
   if (error) throw error;
   revalidatePath("/takvim"); revalidatePath("/"); revalidatePath(`/seans/${id}`);
 }
@@ -127,12 +128,12 @@ export async function bulkSchedule(fd: FormData) {
   let q = sb.from("sessions").select("id, seq, scheduled_at").eq("sale_id", sale_id).eq("status", "planlandi").order("seq");
   if (onlyUnscheduled) q = q.is("scheduled_at", null);
   const { data: sessions, error } = await q; if (error) throw error;
-  const [h, m] = time.split(":").map(Number);
-  const cur = new Date(`${startDate}T00:00:00`); cur.setHours(h, m, 0, 0);
+  let cur = new Date(`${startDate}T00:00:00Z`);
   for (const sess of sessions ?? []) {
-    while (skipWeekends && (cur.getDay() === 0 || cur.getDay() === 6)) cur.setDate(cur.getDate() + 1);
-    const { error: e } = await sb.from("sessions").update({ scheduled_at: cur.toISOString(), ...(nurse_id ? { nurse_id } : {}) }).eq("id", sess.id); if (e) throw e;
-    cur.setDate(cur.getDate() + every);
+    while (skipWeekends && (cur.getUTCDay() === 0 || cur.getUTCDay() === 6)) cur.setUTCDate(cur.getUTCDate() + 1);
+    const dateStr = cur.toISOString().slice(0, 10);
+    const { error: e } = await sb.from("sessions").update({ scheduled_at: trToISO(dateStr, time), ...(nurse_id ? { nurse_id } : {}) }).eq("id", sess.id); if (e) throw e;
+    cur.setUTCDate(cur.getUTCDate() + every);
   }
   revalidatePath(`/muayene/${encounter_id}`); revalidatePath("/takvim"); revalidatePath("/");
 }

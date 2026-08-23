@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil, FileText } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { dt } from "@/lib/format";
+import { dt, t, toIstanbulInputValue } from "@/lib/format";
 import { addVital, updateVital, deleteVital, addStockMove, applyKit, applyMaterialKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
@@ -39,7 +39,7 @@ function VitalRow({ v, open, sessionId }: { v: any; open: boolean; sessionId: st
   const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Solunum", v.resp_rate], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
   const summary = (
     <div className="flex items-start gap-3 flex-1 min-w-0">
-      <div className="w-14 shrink-0 text-xs"><div className="font-semibold">{PHASE[v.phase]}</div><div className="text-slate-500 num">{new Date(v.measured_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</div></div>
+      <div className="w-14 shrink-0 text-xs"><div className="font-semibold">{PHASE[v.phase]}</div><div className="text-slate-500 num">{t(v.measured_at)}</div></div>
       <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
     </div>
   );
@@ -82,10 +82,10 @@ export default async function Session({ params }: { params: Promise<{ id: string
   const rxUrl = rx?.[0] ? (await sb.storage.from("prescriptions").createSignedUrl(rx[0].file_path, 3600)).data?.signedUrl : null;
   const needConsent = s.sales.services.requires_consent; const hasConsent = !!consent || !needConsent;
   const canComplete = start.length > 0 && end.length > 0 && hasConsent;
-  const local = s.scheduled_at ? new Date(new Date(s.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+  const local = toIstanbulInputValue(s.scheduled_at);
   const CONSENT_TEXT = `Ben, ${name}, bana uygulanacak "${s.sales.services.name}" işlemi hakkında bilgilendirildim. İşlemin amacı, olası riskleri ve alternatifleri anlatıldı. Sorularım yanıtlandı. İşlemin evde uygulanmasını kendi rızamla kabul ediyorum.`;
   const steps = [{ ok: !!consent, label: "Onam", show: needConsent }, { ok: start.length > 0, label: "Başlangıç" }, { ok: (moves?.length ?? 0) > 0, label: "Malzeme" }, { ok: end.length > 0, label: "Bitiş" }].filter(x => x.show !== false);
-  const exitTime = s.completed_at ? new Date(s.completed_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : null;
+  const exitTime = s.completed_at ? t(s.completed_at) : null;
   const Section = ({ n, icon: Icon, title, ok, children }: { n: number; icon: any; title: string; ok: boolean; children: React.ReactNode }) => (
     <details className="card">
       <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer">

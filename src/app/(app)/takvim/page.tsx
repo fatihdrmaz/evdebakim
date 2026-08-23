@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, User, CalendarX2 } from "lucide-react";
 import { addDays, format, startOfWeek, isSameDay } from "date-fns";
 import { tr } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/server";
+import { t } from "@/lib/format";
 import { PageHeader } from "@/components/ui";
 
 const TONE: Record<string, string> = { tamamlandi: "border-emerald-200 bg-emerald-50", iptal: "border-slate-200 bg-slate-50", planlandi: "border-brand-200 bg-white" };
@@ -39,7 +40,7 @@ export default async function Calendar({ searchParams }: { searchParams: Promise
                 <Link key={x.id} href={`/seans/${x.id}`} className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-xs transition-shadow hover:shadow-sm ${TONE[x.status] ?? TONE.planlandi} ${x.status === "iptal" ? "text-slate-500 line-through" : "text-slate-900"}`}>
                   <span className={`size-1.5 rounded-full mt-1.5 shrink-0 ${DOT[x.status] ?? DOT.planlandi}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5"><b className="num shrink-0">{format(new Date(x.scheduled_at), "HH:mm")}</b><span className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</span></div>
+                    <div className="flex items-center gap-1.5"><b className="num shrink-0">{t(x.scheduled_at)}</b><span className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</span></div>
                     <div className="text-slate-500 truncate mt-0.5">{x.sales.services.name} · {x.seq}/{x.sales.session_count}</div>
                     {x.profiles && <div className="flex items-center gap-1 text-slate-400 mt-0.5"><User className="size-3 shrink-0" /><span className="truncate">{x.profiles.full_name.split(" ")[0]}</span></div>}
                   </div>
