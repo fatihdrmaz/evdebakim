@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, CalendarX, Wallet, PackageMinus, Clock, MapPin, ArrowRight, CheckCircle2 } from "lucide-react";
+import { CalendarDays, CalendarX, Wallet, PackageMinus, Clock, MapPin, ArrowRight, CheckCircle2, Phone, Navigation } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl } from "@/lib/format";
 import { Card, Stat, StatusBadge, Avatar, Empty, ListRow } from "@/components/ui";
@@ -9,7 +9,7 @@ export default async function Home() {
   const staff = p?.role !== "hekim";
   const start = new Date(); start.setHours(0, 0, 0, 0); const end = new Date(start); end.setDate(end.getDate() + 1);
   const [{ data: today }, { data: unplanned }, balRes, lowRes] = await Promise.all([
-    sb.from("sessions").select("id, seq, scheduled_at, status, patients(first_name,last_name,address), sales(session_count, services(name))").gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at"),
+    sb.from("sessions").select("id, seq, scheduled_at, status, patients(first_name,last_name,phone,address), sales(session_count, services(name))").gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at"),
     sb.from("sessions").select("id, seq, patients(first_name,last_name), sales(session_count, services(name))").is("scheduled_at", null).eq("status", "planlandi").limit(20),
     staff ? sb.from("sale_balances").select("id, balance, patient_id, patients(first_name,last_name), services(name)").gt("balance", 0).order("created_at", { ascending: false }) : Promise.resolve({ data: [] as any[] }),
     staff ? sb.from("product_stock").select("id,name,stock,min_stock").eq("is_active", true) : Promise.resolve({ data: [] as any[] }),
@@ -36,16 +36,22 @@ export default async function Home() {
       <Card title="Bugünkü Seanslar" action={<Link href="/takvim" className="btn-ghost btn-sm">Takvim <ArrowRight className="size-4" /></Link>} flush>
         {!today?.length ? <Empty icon={CalendarDays} title="Bugün planlı seans yok" hint="Planlanmamış seansları aşağıdan saatlendirebilirsiniz." /> : (
           <div className="divide-rows">{today.map((x: any) => (
-            <Link key={x.id} href={`/seans/${x.id}`} className="row">
-              <div className="flex flex-col items-center w-12 shrink-0"><span className="text-sm font-bold num">{new Date(x.scheduled_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</span></div>
-              <Avatar name={`${x.patients.first_name} ${x.patients.last_name}`} />
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</div>
-                <div className="text-[13px] text-slate-500 truncate">{x.sales.services.name} · Seans {x.seq}/{x.sales.session_count}</div>
-                {x.patients.address && <div className="text-xs text-slate-400 truncate flex items-center gap-1"><MapPin className="size-3" />{x.patients.address}</div>}
+            <div key={x.id} className="row px-2 sm:px-3">
+              <Link href={`/seans/${x.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="flex flex-col items-center w-12 shrink-0"><span className="text-sm font-bold num">{new Date(x.scheduled_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</span></div>
+                <Avatar name={`${x.patients.first_name} ${x.patients.last_name}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</div>
+                  <div className="text-[13px] text-slate-500 truncate">{x.sales.services.name} · Seans {x.seq}/{x.sales.session_count}</div>
+                  {x.patients.address && <div className="text-xs text-slate-400 truncate flex items-center gap-1"><MapPin className="size-3" />{x.patients.address}</div>}
+                </div>
+              </Link>
+              <div className="flex items-center gap-1 shrink-0">
+                {x.patients.phone && <a href={`tel:${x.patients.phone}`} aria-label="Ara" className="btn-icon"><Phone className="size-4" /></a>}
+                {x.patients.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(x.patients.address)}`} target="_blank" rel="noopener noreferrer" aria-label="Yol tarifi" className="btn-icon"><Navigation className="size-4" /></a>}
+                <StatusBadge status={x.status} />
               </div>
-              <StatusBadge status={x.status} />
-            </Link>))}</div>)}
+            </div>))}</div>)}
       </Card>
 
       {!!unplanned?.length && (
