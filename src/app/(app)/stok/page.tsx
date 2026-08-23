@@ -1,7 +1,7 @@
-import { Plus, Package, SlidersHorizontal, PackagePlus } from "lucide-react";
+import { Plus, Package, SlidersHorizontal, PackagePlus, Pencil, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { CAT } from "@/lib/format";
-import { addStockMove, saveProduct } from "@/lib/actions";
+import { addStockMove, saveProduct, deleteProduct } from "@/lib/actions";
 import { PageHeader, Card, Field, Empty } from "@/components/ui";
 
 export default async function Products() {
@@ -15,12 +15,32 @@ export default async function Products() {
       <div className="grid lg:grid-cols-[1fr_22rem] gap-5 items-start">
         <Card flush>
           {!products?.length ? <Empty icon={Package} title="Ürün yok" hint="Sağdaki formdan ürün ekleyin." /> : (
-            <div className="overflow-x-auto"><table className="tbl">
-              <thead><tr><th>Ürün</th><th className="text-right">Stok</th><th className="text-right">Kritik</th></tr></thead>
-              <tbody>{groups.map(g => (<>
-                <tr key={g.c}><td colSpan={3} className="bg-slate-50/60 text-xs font-semibold uppercase tracking-wide text-slate-500 py-2">{CAT[g.c]}</td></tr>
-                {g.items.map(p => <tr key={p.id} className={!p.is_active ? "opacity-50" : ""}><td className="font-medium">{p.name}</td><td className="text-right"><span className={`font-bold num ${p.stock <= p.min_stock ? "text-red-600" : ""}`}>{p.stock}</span></td><td className="text-right text-slate-500 num">{p.min_stock}</td></tr>)}
-              </>))}</tbody></table></div>)}
+            <div>{groups.map(g => (
+              <div key={g.c}>
+                <div className="bg-slate-50/60 text-xs font-semibold uppercase tracking-wide text-slate-500 py-2 px-4 sm:px-5">{CAT[g.c]}</div>
+                {g.items.map(p => (
+                  <details key={p.id} className={`group border-b border-slate-100 last:border-0 ${!p.is_active ? "opacity-50" : ""}`}>
+                    <summary className="flex items-center gap-3 px-4 sm:px-5 py-2.5 cursor-pointer hover:bg-slate-50">
+                      <span className="flex-1 font-medium truncate">{p.name}</span>
+                      <span className={`font-bold num ${p.stock <= p.min_stock ? "text-red-600" : ""}`}>{p.stock}</span>
+                      <span className="text-slate-500 num text-sm w-9 text-right">/{p.min_stock}</span>
+                      <Pencil className="size-3.5 text-slate-400 shrink-0" />
+                    </summary>
+                    <div className="px-4 sm:px-5 pb-4 pt-3 space-y-3 border-t border-slate-100 bg-slate-50/40">
+                      <form action={saveProduct} className="grid grid-cols-2 gap-3">
+                        <input type="hidden" name="id" value={p.id} />
+                        <Field label="Ürün adı" required className="col-span-2"><input name="name" className="input" defaultValue={p.name} required /></Field>
+                        <Field label="Kategori"><select name="category" className="input" defaultValue={p.category}><option value="serum">Serum</option><option value="ilac">İlaç</option><option value="sarf">Sarf</option></select></Field>
+                        <Field label="Kritik stok"><input name="min_stock" type="number" inputMode="numeric" className="input" defaultValue={p.min_stock} /></Field>
+                        <label className="col-span-2 flex items-center gap-2 text-sm cursor-pointer min-h-9"><input type="checkbox" name="is_active" defaultChecked={p.is_active} className="size-4 accent-brand-600" />Aktif</label>
+                        <button className="btn-secondary col-span-2">Kaydet</button>
+                      </form>
+                      <form action={deleteProduct.bind(null, p.id)}><button className="btn-danger w-full"><Trash2 className="size-4" />Ürünü Sil</button></form>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ))}</div>)}
         </Card>
         <div className="space-y-5">
           <Card title={<span className="flex items-center gap-2"><PackagePlus className="size-4 text-brand-600" />Yeni Ürün</span>}>

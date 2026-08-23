@@ -54,6 +54,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
   ]);
   const p = s.patients; const name = `${p.first_name} ${p.last_name}`;
   const start = vitals?.filter(v => v.phase === "baslangic") ?? []; const mid = vitals?.filter(v => v.phase === "ara") ?? []; const end = vitals?.filter(v => v.phase === "bitis") ?? [];
+  const consentUrl = consent ? (await sb.storage.from("consents").createSignedUrl(consent.signature_path, 3600)).data?.signedUrl : null;
   const needConsent = s.sales.services.requires_consent; const hasConsent = !!consent || !needConsent;
   const canComplete = start.length > 0 && end.length > 0 && hasConsent;
   const local = s.scheduled_at ? new Date(new Date(s.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
@@ -89,8 +90,14 @@ export default async function Session({ params }: { params: Promise<{ id: string
       </details>
 
       {needConsent && <Section n={1} icon={FileSignature} title="Onam" ok={!!consent}>
-        {consent ? <Alert tone="success"><CheckCircle2 className="size-4 mt-0.5 shrink-0" /><span><b>{consent.signer_name}</b> · {dt(consent.signed_at)}</span></Alert>
-          : open ? <ConsentPad sessionId={id} defaultName={name} text={CONSENT_TEXT} /> : <p className="text-sm text-slate-500">Onam alınmadı.</p>}
+        {consent ? (
+          <div className="space-y-3">
+            <Alert tone="success"><CheckCircle2 className="size-4 mt-0.5 shrink-0" /><span><b>{consent.signer_name}</b> · {dt(consent.signed_at)}</span></Alert>
+            {consentUrl && <a href={consentUrl} target="_blank" rel="noopener noreferrer" className="block rounded-xl border border-slate-200 overflow-hidden hover:border-brand-300 transition-colors">
+              <img src={consentUrl} alt="Onam imzası" className="w-full max-h-40 object-contain bg-white" />
+            </a>}
+          </div>
+        ) : open ? <ConsentPad sessionId={id} defaultName={name} text={CONSENT_TEXT} /> : <p className="text-sm text-slate-500">Onam alınmadı.</p>}
       </Section>}
 
       <Section n={needConsent ? 2 : 1} icon={Activity} title="Başlangıç Vitali" ok={start.length > 0}>
