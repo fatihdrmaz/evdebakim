@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
-import { addVital, updateVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
+import { addVital, updateVital, deleteVital, addStockMove, applyKit, applyMaterialKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
 
@@ -64,7 +64,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
   const { data: s } = await sb.from("sessions").select("*, patients(*), sales(session_count, service_id, encounter_id, services(name, requires_consent))").eq("id", id).single();
   if (!s) notFound();
   const staff = me?.role !== "hekim"; const open = staff && s.status === "planlandi"; const encId = s.sales.encounter_id;
-  const [{ data: vitals }, { data: consent }, { data: moves }, { data: an }, { data: nurses }, { data: products }, { data: kit }, { data: siblings }] = await Promise.all([
+  const [{ data: vitals }, { data: consent }, { data: moves }, { data: an }, { data: nurses }, { data: products }, { data: kit }, { data: materialKits }, { data: siblings }] = await Promise.all([
     sb.from("vitals").select("*").eq("session_id", id).order("measured_at"),
     sb.from("consents").select("*").eq("session_id", id).maybeSingle(),
     sb.from("stock_moves").select("*, products(name)").eq("session_id", id).order("created_at"),
@@ -72,6 +72,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
     sb.from("product_stock").select("id, name, stock").eq("is_active", true).order("name"),
     sb.from("service_kits").select("quantity, products(name)").eq("service_id", s.sales.service_id),
+    sb.from("material_kits").select("id, name, material_kit_items(quantity, products(name))").order("name"),
     sb.from("sessions").select("id, seq, status").eq("sale_id", s.sale_id).order("seq"),
   ]);
   const p = s.patients; const name = `${p.first_name} ${p.last_name}`;
@@ -141,7 +142,11 @@ export default async function Session({ params }: { params: Promise<{ id: string
         <div className="space-y-3">
           {!!moves?.length && <ul className="divide-rows rounded-xl border border-slate-200">{moves.map((m: any) => <li key={m.id} className="flex items-center gap-3 px-3.5 py-2 text-sm"><span className="flex-1">{m.products.name}</span><span className="badge badge-slate num">× {-m.quantity}</span>{open && <form action={deleteStockMove.bind(null, m.id, id)}><button aria-label="Sil" className="btn-icon size-8 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}</li>)}</ul>}
           {!moves?.length && !open && <p className="text-sm text-slate-500">Düşüm yapılmadı.</p>}
-          {open && !!kit?.length && !moves?.length && <form action={applyKit.bind(null, id)}><button className="btn w-full"><Package className="size-4" />Paket Düşüm Uygula</button><p className="hint text-center">{kit.map((k: any) => `${k.quantity} × ${k.products.name}`).join(", ")}</p></form>}
+          {open && !!kit?.length && !moves?.length && <form action={applyKit.bind(null, id)}><button className="btn w-full"><Package className="size-4" />Hizmet Paketini Uygula</button><p className="hint text-center">{kit.map((k: any) => `${k.quantity} × ${k.products.name}`).join(", ")}</p></form>}
+          {open && !!materialKits?.length && <form action={applyMaterialKit} className="grid grid-cols-[1fr_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
+            <Field label="Malzeme paketi" hint="Seçilen paketteki tüm ürünler tek seferde düşer"><select name="kit_id" className="input" required><option value="">Seçiniz</option>{materialKits.map((k: any) => <option key={k.id} value={k.id}>{k.name} · {k.material_kit_items.map((it: any) => `${it.quantity}×${it.products.name}`).join(", ")}</option>)}</select></Field>
+            <button className="btn-secondary"><Package className="size-4" />Uygula</button>
+          </form>}
           {open && <form action={addStockMove} className="grid grid-cols-[1fr_4.5rem_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
             <Field label="Ürün ekle"><select name="product_id" className="input" required><option value="">Seçiniz</option>{products?.map(x => <option key={x.id} value={x.id}>{x.name} ({x.stock})</option>)}</select></Field>
             <Field label="Adet"><input name="quantity" type="number" min={1} inputMode="numeric" defaultValue={1} className="input px-2" /></Field>

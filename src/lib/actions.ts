@@ -188,6 +188,41 @@ export async function applyKit(session_id: string) {
   revalidatePath(`/seans/${session_id}`);
 }
 
+// ---------- MALZEME PAKETLERİ ----------
+export async function saveMaterialKit(fd: FormData) {
+  const sb = await createClient();
+  const { error } = await sb.from("material_kits").insert({ name: s(fd, "name") });
+  if (error) throw error;
+  revalidatePath("/stok/paketler");
+}
+
+export async function deleteMaterialKit(id: string) {
+  const sb = await createClient();
+  await sb.from("material_kits").delete().eq("id", id);
+  revalidatePath("/stok/paketler");
+}
+
+export async function addMaterialKitItem(fd: FormData) {
+  const sb = await createClient();
+  const { error } = await sb.from("material_kit_items").upsert({ kit_id: s(fd, "kit_id"), product_id: s(fd, "product_id"), quantity: n(fd, "quantity") });
+  if (error) throw error;
+  revalidatePath("/stok/paketler");
+}
+
+export async function deleteMaterialKitItem(kit_id: string, product_id: string) {
+  const sb = await createClient();
+  await sb.from("material_kit_items").delete().match({ kit_id, product_id });
+  revalidatePath("/stok/paketler");
+}
+
+export async function applyMaterialKit(fd: FormData) {
+  const sb = await createClient();
+  const session_id = s(fd, "session_id")!;
+  const { error } = await sb.rpc("apply_material_kit", { p_session_id: session_id, p_kit_id: s(fd, "kit_id") });
+  if (error) throw error;
+  revalidatePath(`/seans/${session_id}`);
+}
+
 export async function addStockMove(fd: FormData) {
   const sb = await createClient();
   const session_id = s(fd, "session_id");
