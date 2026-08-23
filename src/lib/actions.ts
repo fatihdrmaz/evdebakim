@@ -26,10 +26,15 @@ export async function savePatient(fd: FormData) {
 export async function saveAnamnesis(fd: FormData) {
   const sb = await createClient();
   const patient_id = s(fd, "patient_id")!;
+  const allergies = s(fd, "allergy_yn") === "var" ? (s(fd, "allergy_detail") ?? "Var") : null;
+  const chronicOther = fd.get("chronic_other_on") === "on" ? s(fd, "chronic_other_text") : null;
+  const chronic_diseases = [...fd.getAll("chronic").map(String), ...(chronicOther ? [chronicOther] : [])].join(", ") || null;
+  const medOther = s(fd, "med_other");
+  const medications = [...fd.getAll("med").map(String), ...(medOther ? [medOther] : [])].join(", ") || null;
   const { error } = await sb.from("anamnesis").upsert({
     patient_id, height_cm: n(fd, "height_cm"), weight_kg: n(fd, "weight_kg"),
-    chronic_diseases: s(fd, "chronic_diseases"), surgeries: s(fd, "surgeries"), allergies: s(fd, "allergies"),
-    medications: s(fd, "medications"), clinical_history: s(fd, "clinical_history"), special_conditions: s(fd, "special_conditions"),
+    chronic_diseases, surgeries: s(fd, "surgeries"), allergies,
+    medications, clinical_history: s(fd, "clinical_history"), special_conditions: s(fd, "special_conditions"),
     smoking: fd.get("smoking") === "on", alcohol: fd.get("alcohol") === "on", pregnancy: fd.get("pregnancy") === "on",
     updated_at: new Date().toISOString(),
   });

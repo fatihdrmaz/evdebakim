@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { saveAnamnesis } from "@/lib/actions";
 import { PageHeader, Card, Field } from "@/components/ui";
+import AnamnesisMedicalFields from "@/components/AnamnesisMedicalFields";
 
 export default async function Anamnez({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ back?: string }> }) {
   const { id } = await params; const { back } = await searchParams; const sb = await createClient();
@@ -18,9 +19,7 @@ export default async function Anamnez({ params, searchParams }: { params: Promis
       </Card>
       <Card title="Tıbbi Öykü">
         <div className="space-y-4">
-          {T("allergies", "Alerjiler", a?.allergies, "İlaç, gıda, lateks… Yoksa boş bırakın")}
-          {T("chronic_diseases", "Kronik hastalıklar", a?.chronic_diseases, "Hipertansiyon, diyabet…")}
-          {T("medications", "Kullandığı ilaçlar", a?.medications, "İlaç adı ve dozu")}
+          <AnamnesisMedicalFields allergies={a?.allergies} chronicDiseases={a?.chronic_diseases} medications={a?.medications} />
           {T("surgeries", "Geçirdiği ameliyatlar", a?.surgeries)}
           {T("clinical_history", "Klinik öykü", a?.clinical_history)}
           {T("special_conditions", "Özel durumlar", a?.special_conditions, "Hareket kısıtı, pacemaker, vb.")}
