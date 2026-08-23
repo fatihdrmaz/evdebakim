@@ -62,7 +62,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
   const steps = [{ ok: !!consent, label: "Onam", show: needConsent }, { ok: start.length > 0, label: "Başlangıç" }, { ok: (moves?.length ?? 0) > 0, label: "Malzeme" }, { ok: end.length > 0, label: "Bitiş" }].filter(x => x.show !== false);
   const exitTime = s.completed_at ? new Date(s.completed_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : null;
   const Section = ({ n, icon: Icon, title, ok, children }: { n: number; icon: any; title: string; ok: boolean; children: React.ReactNode }) => (
-    <details className="card" open={!ok}>
+    <details className="card">
       <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer">
         <span className={`size-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0 ${ok ? "bg-emerald-500 text-white" : "bg-slate-200 text-slate-600"}`}>{ok ? <Check className="size-3.5" /> : n}</span>
         <Icon className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">{title}</span>
