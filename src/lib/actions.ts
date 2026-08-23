@@ -80,6 +80,29 @@ export async function addPayment(fd: FormData) {
   revalidatePath(`/muayene/${s(fd, "encounter_id")}`);
 }
 
+export async function addPrescription(fd: FormData) {
+  const sb = await createClient();
+  const { data: { user } } = await sb.auth.getUser();
+  const encounter_id = s(fd, "encounter_id")!;
+  const file = fd.get("file") as File;
+  if (!file || file.size === 0) throw new Error("Dosya seçilmedi");
+  const ext = file.name.split(".").pop() || "pdf";
+  const path = `${encounter_id}/${Date.now()}.${ext}`;
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const { error: e1 } = await sb.storage.from("prescriptions").upload(path, bytes, { contentType: file.type || "application/octet-stream" });
+  if (e1) throw e1;
+  const { error } = await sb.from("prescriptions").insert({ encounter_id, file_path: path, file_name: file.name, notes: s(fd, "notes"), uploaded_by: user?.id });
+  if (error) throw error;
+  revalidatePath(`/muayene/${encounter_id}`);
+}
+
+export async function deletePrescription(id: string, encounter_id: string, file_path: string) {
+  const sb = await createClient();
+  await sb.storage.from("prescriptions").remove([file_path]);
+  await sb.from("prescriptions").delete().eq("id", id);
+  revalidatePath(`/muayene/${encounter_id}`);
+}
+
 // ---------- SEANS ----------
 export async function scheduleSession(fd: FormData) {
   const sb = await createClient();

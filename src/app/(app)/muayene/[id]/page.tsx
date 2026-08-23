@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2 } from "lucide-react";
+import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2, FileText, Trash2, Download } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl, dt, d, METHOD } from "@/lib/format";
-import { addPayment, updateEncounter, setEncounterStatus, createSale } from "@/lib/actions";
+import { addPayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription } from "@/lib/actions";
 import QuickPlanner from "@/components/QuickPlanner";
 import SaleForm from "@/components/SaleForm";
 import { PageHeader, Card, StatusBadge, Empty, Alert, Field } from "@/components/ui";
@@ -15,12 +15,13 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
   const { data: e } = await sb.from("encounters").select("*, patients(*), doctors(full_name)").eq("id", id).single();
   if (!e) notFound();
   const p = e.patients; const name = `${p.first_name} ${p.last_name}`; const staff = me?.role !== "hekim"; const open = e.status === "acik";
-  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: services }, { data: history }] = await Promise.all([
+  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: services }, { data: prescriptions }, { data: history }] = await Promise.all([
     sb.from("anamnesis").select("*").eq("patient_id", p.id).maybeSingle(),
     sb.from("sale_balances").select("*, services(name), sessions(id, seq, scheduled_at, status, nurse_id), payments(id, amount, method, paid_at)").eq("encounter_id", id).order("created_at"),
     sb.from("doctors").select("id, full_name").order("full_name"),
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
     sb.from("services").select("id, name, default_price").eq("is_active", true).order("name"),
+    sb.from("prescriptions").select("*").eq("encounter_id", id).order("created_at", { ascending: false }),
     sb.from("encounters").select("id, opened_at, status, complaint, diagnosis").eq("patient_id", p.id).neq("id", id).order("opened_at", { ascending: false }).limit(5),
   ]);
   const totalBalance = (sales ?? []).reduce((a: number, s: any) => a + Number(s.balance), 0);
@@ -31,6 +32,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
   const { data: recentVitals } = sessionIds.length
     ? await sb.from("vitals").select("*").in("session_id", sessionIds).order("measured_at", { ascending: false }).limit(6)
     : { data: [] as any[] };
+  const rx = await Promise.all((prescriptions ?? []).map(async (r: any) => ({ ...r, url: (await sb.storage.from("prescriptions").createSignedUrl(r.file_path, 3600)).data?.signedUrl })));
 
   return (
     <div className="space-y-5">
@@ -61,6 +63,25 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
               {open && staff && <button className="btn-secondary">Kaydet</button>}
             </form>
           </details>
+
+          <Card title={<span className="flex items-center gap-2"><FileText className="size-4 text-brand-600" />Reçete</span>}>
+            <div className="space-y-3">
+              {!rx.length && <p className="text-sm text-slate-500">Henüz reçete yüklenmedi.</p>}
+              {!!rx.length && <ul className="divide-rows rounded-xl border border-slate-200">{rx.map((r: any) => (
+                <li key={r.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
+                  <FileText className="size-4 text-slate-400 shrink-0" />
+                  <div className="flex-1 min-w-0"><div className="font-medium truncate">{r.file_name ?? "Reçete"}</div><div className="text-xs text-slate-500">{dt(r.created_at)}{r.notes ? ` · ${r.notes}` : ""}</div></div>
+                  {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn-icon" aria-label="Görüntüle/indir"><Download className="size-4" /></a>}
+                  {open && <form action={deletePrescription.bind(null, r.id, id, r.file_path)}><button aria-label="Sil" className="btn-icon text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}
+                </li>))}</ul>}
+              {open && <form action={addPrescription} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+                <input type="hidden" name="encounter_id" value={id} />
+                <Field label="Reçete dosyası (foto/PDF)"><input name="file" type="file" accept="image/*,.pdf" required className="input" /></Field>
+                <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
+                <button className="btn"><Plus className="size-4" />Yükle</button>
+              </form>}
+            </div>
+          </Card>
 
           <Card title={<span className="flex items-center gap-2"><Activity className="size-4 text-brand-600" />Vital Bulgular</span>}>
             {!recentVitals?.length ? <p className="text-sm text-slate-500">Bu muayeneye bağlı hiçbir seansta ölçüm girilmedi.</p> : (

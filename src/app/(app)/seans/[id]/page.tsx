@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
 import { addVital, deleteVital, addStockMove, applyKit, deleteStockMove, scheduleSession, setSessionStatus } from "@/lib/actions";
@@ -65,7 +65,8 @@ export default async function Session({ params }: { params: Promise<{ id: string
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}`} action={<StatusBadge status={s.status} />} />
+      <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}`}
+        action={<div className="flex items-center gap-2"><Link href={`/hastalar/${p.id}/anamnez?back=/seans/${id}`} aria-label="Anamnez" className="btn-icon"><ClipboardList className="size-5" /></Link><StatusBadge status={s.status} /></div>} />
 
       {/* Seans gezgini */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">{siblings?.map(x => <Link key={x.id} href={`/seans/${x.id}`} aria-current={x.id === id ? "page" : undefined} className={`size-9 shrink-0 rounded-lg flex items-center justify-center text-sm font-bold border transition-colors ${x.id === id ? "bg-brand-600 border-brand-600 text-white" : x.status === "tamamlandi" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : x.status === "iptal" ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-200 text-slate-700"}`}>{x.seq}</Link>)}</div>
