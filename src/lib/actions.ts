@@ -278,9 +278,10 @@ export async function saveProduct(fd: FormData) {
   revalidatePath("/stok"); revalidatePath("/ayarlar");
 }
 
-/** Ürünü tamamen sil; stok hareketi/hizmet paketi gibi bağlı kayıt varsa pasife al. */
+/** Ürünü tamamen sil; stok hareket geçmişi de birlikte silinir. Alış faturası gibi gerçek bir kayıt bağlıysa pasife alınır. */
 export async function deleteProduct(id: string) {
   const sb = await createClient();
+  await sb.from("stock_moves").delete().eq("product_id", id);
   const { error } = await sb.from("products").delete().eq("id", id);
   if (error) { const { error: e2 } = await sb.from("products").update({ is_active: false }).eq("id", id); if (e2) throw e2; }
   revalidatePath("/stok"); revalidatePath("/ayarlar");
