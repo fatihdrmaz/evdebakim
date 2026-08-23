@@ -86,7 +86,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
           <Card title={<span className="flex items-center gap-2"><Activity className="size-4 text-brand-600" />Vital Bulgular</span>}>
             {!recentVitals?.length ? <p className="text-sm text-slate-500">Bu muayeneye bağlı hiçbir seansta ölçüm girilmedi.</p> : (
               <ul className="divide-rows">{recentVitals.map((v: any) => {
-                const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
+                const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Solunum", v.resp_rate], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
                 return (
                   <li key={v.id} className="flex items-start gap-3 py-2.5">
                     <Link href={`/seans/${v.session_id}`} className="w-20 shrink-0 text-xs hover:underline">

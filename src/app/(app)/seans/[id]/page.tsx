@@ -16,6 +16,7 @@ function VitalInputs({ v }: { v?: any }) {
         <Field label="Büyük TA"><input name="bp_sys" type="number" inputMode="numeric" className="input px-3" placeholder="120" defaultValue={v?.bp_sys ?? ""} /></Field>
         <Field label="Küçük TA"><input name="bp_dia" type="number" inputMode="numeric" className="input px-3" placeholder="80" defaultValue={v?.bp_dia ?? ""} /></Field>
         <Field label="Nabız"><input name="pulse" type="number" inputMode="numeric" className="input px-3" placeholder="72" defaultValue={v?.pulse ?? ""} /></Field>
+        <Field label="Solunum /dk"><input name="resp_rate" type="number" inputMode="numeric" className="input px-3" placeholder="16" defaultValue={v?.resp_rate ?? ""} /></Field>
         <Field label="Ateş °C"><input name="temp" type="number" step="0.1" inputMode="decimal" className="input px-3" placeholder="36.5" defaultValue={v?.temp ?? ""} /></Field>
         <Field label="SpO₂ %"><input name="spo2" type="number" inputMode="numeric" className="input px-3" placeholder="98" defaultValue={v?.spo2 ?? ""} /></Field>
         <Field label="Kan şekeri"><input name="glucose" type="number" inputMode="numeric" className="input px-3" placeholder="100" defaultValue={v?.glucose ?? ""} /></Field>
@@ -35,7 +36,7 @@ function VitalForm({ sessionId, phase }: { sessionId: string; phase: string }) {
 }
 
 function VitalRow({ v, open, sessionId }: { v: any; open: boolean; sessionId: string }) {
-  const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
+  const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Solunum", v.resp_rate], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
   const summary = (
     <div className="flex items-start gap-3 flex-1 min-w-0">
       <div className="w-14 shrink-0 text-xs"><div className="font-semibold">{PHASE[v.phase]}</div><div className="text-slate-500 num">{new Date(v.measured_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</div></div>
