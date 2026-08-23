@@ -7,8 +7,9 @@ const MED_OPTIONS = ["Deltacortril", "Ürikoliz", "PROGRAF", "Novorapid", "Lantu
 
 const splitList = (v?: string | null) => (v ?? "").split(",").map(s => s.trim()).filter(Boolean);
 
-export default function AnamnesisMedicalFields({ allergies, chronicDiseases, medications }: { allergies?: string | null; chronicDiseases?: string | null; medications?: string | null }) {
+export default function AnamnesisMedicalFields({ allergies, chronicDiseases, medications, fistulaSide }: { allergies?: string | null; chronicDiseases?: string | null; medications?: string | null; fistulaSide?: string | null }) {
   const [allergyYn, setAllergyYn] = useState<"yok" | "var">(allergies ? "var" : "yok");
+  const [fistulaYn, setFistulaYn] = useState<"yok" | "var">(fistulaSide ? "var" : "yok");
 
   const chronicItems = splitList(chronicDiseases);
   const chronicOther = chronicItems.filter(i => !CHRONIC_OPTIONS.includes(i)).join(", ");
@@ -26,6 +27,20 @@ export default function AnamnesisMedicalFields({ allergies, chronicDiseases, med
           <label className="flex items-center gap-2 cursor-pointer min-h-9"><input type="radio" name="allergy_yn" value="var" checked={allergyYn === "var"} onChange={() => setAllergyYn("var")} className="size-4 accent-brand-600" />Var</label>
         </div>
         {allergyYn === "var" && <input name="allergy_detail" className="input mt-2" defaultValue={allergies ?? ""} placeholder="Ne olduğunu yazın: örn. penisilin, fıstık, polen" autoFocus />}
+      </div>
+
+      <div>
+        <span className="label">Fistül var mı?</span>
+        <div className="flex gap-4 mt-1">
+          <label className="flex items-center gap-2 cursor-pointer min-h-9"><input type="radio" name="fistula_yn" value="yok" checked={fistulaYn === "yok"} onChange={() => setFistulaYn("yok")} className="size-4 accent-brand-600" />Yok</label>
+          <label className="flex items-center gap-2 cursor-pointer min-h-9"><input type="radio" name="fistula_yn" value="var" checked={fistulaYn === "var"} onChange={() => setFistulaYn("var")} className="size-4 accent-brand-600" />Var</label>
+        </div>
+        {fistulaYn === "var" && (
+          <div className="flex gap-4 mt-2">
+            <label className="flex items-center gap-2 cursor-pointer min-h-9"><input type="radio" name="fistula_side" value="sag" defaultChecked={fistulaSide === "sag" || !fistulaSide} className="size-4 accent-brand-600" />Sağ kol</label>
+            <label className="flex items-center gap-2 cursor-pointer min-h-9"><input type="radio" name="fistula_side" value="sol" defaultChecked={fistulaSide === "sol"} className="size-4 accent-brand-600" />Sol kol</label>
+          </div>
+        )}
       </div>
 
       <div>

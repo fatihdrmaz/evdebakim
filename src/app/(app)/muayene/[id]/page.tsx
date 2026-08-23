@@ -45,6 +45,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
         <div className="card card-pad flex items-center gap-3"><span className="size-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><MapPin className="size-5" /></span><div className="min-w-0"><div className="text-xs text-slate-500">Adres</div><div className="font-semibold truncate">{p.address ?? "—"}</div></div></div>
       </div>
       {an?.allergies && <Alert tone="danger"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Alerji:</b> {an.allergies}</span></Alert>}
+      {an?.fistula_side && <Alert tone="warn"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Fistül:</b> {an.fistula_side === "sag" ? "Sağ kol" : "Sol kol"} — bu koldan TA ölçümü/iğne uygulamayın</span></Alert>}
       {!an && <Alert tone="warn"><ClipboardList className="size-4 mt-0.5 shrink-0" /><span className="flex-1">Anamnez alınmamış.</span><Link href={`/hastalar/${p.id}/anamnez?back=/muayene/${id}`} className="font-semibold underline">Şimdi al</Link></Alert>}
 
       <div className="grid lg:grid-cols-[1fr_20rem] gap-5 items-start">
@@ -150,7 +151,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
           <Card title="Anamnez Özeti" action={staff && <Link href={`/hastalar/${p.id}/anamnez?back=/muayene/${id}`} className="btn-ghost btn-sm"><Pencil className="size-4" />{an ? "Güncelle" : "Al"}</Link>}>
             {!an ? <p className="text-sm text-slate-500">Kayıt yok.</p> : (
               <dl className="space-y-2.5 text-sm">
-                {[["Boy / Kilo", `${an.height_cm ?? "—"} cm / ${an.weight_kg ?? "—"} kg`], ["Kronik", an.chronic_diseases], ["İlaçlar", an.medications], ["Ameliyat", an.surgeries], ["Özel durum", an.special_conditions]].map(([k, v]) => (
+                {[["Boy / Kilo", `${an.height_cm ?? "—"} cm / ${an.weight_kg ?? "—"} kg`], ["Fistül", an.fistula_side ? (an.fistula_side === "sag" ? "Sağ kol" : "Sol kol") : null], ["Kronik", an.chronic_diseases], ["İlaçlar", an.medications], ["Ameliyat", an.surgeries], ["Özel durum", an.special_conditions]].map(([k, v]) => (
                   <div key={k as string}><dt className="text-xs font-medium text-slate-500">{k}</dt><dd>{v || "—"}</dd></div>))}
               </dl>)}
           </Card>

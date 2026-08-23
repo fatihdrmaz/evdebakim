@@ -4,13 +4,13 @@ import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl, d } from "@/lib/format";
 import { PageHeader, Card, Empty } from "@/components/ui";
 
-export default async function Encounters({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams; const sb = await createClient(); const me = await getProfile();
+export default async function Encounters({ searchParams }: { searchParams: Promise<{ q?: string; f?: string }> }) {
+  const { q, f } = await searchParams; const filter = f === "tamamlanan" ? "tamamlanan" : "devam"; const sb = await createClient(); const me = await getProfile();
   const staff = me?.role !== "hekim";
-  let qry = sb.from("encounters").select("id, opened_at, status, patients!inner(first_name,last_name)").order("opened_at", { ascending: false }).limit(100);
+  let qry = sb.from("encounters").select("id, opened_at, status, patients!inner(first_name,last_name)").order("opened_at", { ascending: false }).limit(200);
   if (q) qry = qry.or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%`, { foreignTable: "patients" });
-  const { data: encs } = await qry;
-  const encIds = (encs ?? []).map((e: any) => e.id);
+  const { data: allEncs } = await qry;
+  const encIds = (allEncs ?? []).map((e: any) => e.id);
   const { data: sales } = encIds.length
     ? await sb.from("sale_balances").select("encounter_id, services(name), total, paid, balance, session_count, done_sessions").in("encounter_id", encIds)
     : { data: [] as any[] };
@@ -21,16 +21,24 @@ export default async function Encounters({ searchParams }: { searchParams: Promi
     acc.sessionCount += s.session_count; acc.done += s.done_sessions; acc.services.push((s.services as any).name);
     byEnc[s.encounter_id] = acc;
   }
+  const isDone = (e: any) => { const agg = byEnc[e.id]; return !!agg && agg.sessionCount > 0 && agg.done === agg.sessionCount; };
+  const encs = (allEncs ?? []).filter(e => filter === "tamamlanan" ? isDone(e) : !isDone(e));
+  const qs = (nf: string) => `?f=${nf}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
 
   return (
     <div>
-      <PageHeader title="Muayeneler" subtitle={`${encs?.length ?? 0} kayıt`} />
+      <PageHeader title="Muayeneler" subtitle={`${encs.length} kayıt`} />
       <form className="relative mb-4" role="search">
+        <input type="hidden" name="f" value={filter} />
         <Search className="size-5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         <input name="q" defaultValue={q} placeholder="Hasta adı ara…" className="input pl-11" aria-label="Muayene ara" />
       </form>
+      <div className="flex gap-2 mb-4">
+        <Link href={qs("devam")} className={filter === "devam" ? "btn" : "btn-secondary"}>Devam Edenler</Link>
+        <Link href={qs("tamamlanan")} className={filter === "tamamlanan" ? "btn" : "btn-secondary"}>Tamamlananlar</Link>
+      </div>
       <Card flush>
-        {!encs?.length ? <Empty icon={FolderOpen} title={q ? "Sonuç bulunamadı" : "Henüz muayene yok"} /> : (
+        {!encs.length ? <Empty icon={FolderOpen} title={q ? "Sonuç bulunamadı" : filter === "tamamlanan" ? "Tamamlanan muayene yok" : "Devam eden muayene yok"} /> : (
           <div className="divide-rows">{encs.map((e: any) => {
             const agg = byEnc[e.id];
             return (

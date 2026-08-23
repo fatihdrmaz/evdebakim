@@ -68,7 +68,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
     sb.from("vitals").select("*").eq("session_id", id).order("measured_at"),
     sb.from("consents").select("*").eq("session_id", id).maybeSingle(),
     sb.from("stock_moves").select("*, products(name)").eq("session_id", id).order("created_at"),
-    sb.from("anamnesis").select("allergies, medications").eq("patient_id", s.patient_id).maybeSingle(),
+    sb.from("anamnesis").select("allergies, medications, fistula_side").eq("patient_id", s.patient_id).maybeSingle(),
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
     sb.from("product_stock").select("id, name, stock").eq("is_active", true).order("name"),
     sb.from("service_kits").select("quantity, products(name)").eq("service_id", s.sales.service_id),
@@ -114,6 +114,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
         <a href={p.address ? `https://maps.google.com/?q=${encodeURIComponent(p.address)}` : undefined} target="_blank" className="card p-3 flex items-center gap-3 hover:bg-slate-50"><span className="size-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><Navigation className="size-4" /></span><div className="min-w-0"><div className="text-[11px] text-slate-500">Adres</div><div className="text-sm font-semibold truncate">{p.address ?? "—"}</div></div></a>
       </div>
       {an?.allergies && <Alert tone="danger"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Alerji:</b> {an.allergies}</span></Alert>}
+      {an?.fistula_side && <Alert tone="warn"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Fistül:</b> {an.fistula_side === "sag" ? "Sağ kol" : "Sol kol"} — bu koldan TA ölçümü/iğne uygulamayın</span></Alert>}
       {an?.medications && <Alert tone="info"><Pill className="size-4 mt-0.5 shrink-0" /><span><b>İlaçlar:</b> {an.medications}</span></Alert>}
 
       {open && <div className="card px-4 py-3 flex items-center justify-between gap-2">{steps.map((st, i) => <span key={st.label} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium ${st.ok ? "text-emerald-700" : "text-slate-500"}`}>{st.ok ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}{st.label}{i < steps.length - 1 && <span className="hidden sm:block w-6 h-px bg-slate-200 ml-2" />}</span>)}</div>}

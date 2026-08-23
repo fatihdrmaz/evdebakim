@@ -19,7 +19,7 @@ export default async function Anamnez({ params, searchParams }: { params: Promis
       </Card>
       <Card title="Tıbbi Öykü">
         <div className="space-y-4">
-          <AnamnesisMedicalFields allergies={a?.allergies} chronicDiseases={a?.chronic_diseases} medications={a?.medications} />
+          <AnamnesisMedicalFields allergies={a?.allergies} chronicDiseases={a?.chronic_diseases} medications={a?.medications} fistulaSide={a?.fistula_side} />
           {T("surgeries", "Geçirdiği ameliyatlar", a?.surgeries)}
           {T("clinical_history", "Klinik öykü", a?.clinical_history)}
           {T("special_conditions", "Özel durumlar", a?.special_conditions, "Hareket kısıtı, pacemaker, vb.")}
