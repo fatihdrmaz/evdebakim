@@ -6,7 +6,7 @@ import NavLinks from "@/components/NavLinks";
 import LogoutButton from "@/components/LogoutButton";
 import { Avatar } from "@/components/ui";
 
-const NAV: [string, string][] = [["/", "Bugün"], ["/hastalar", "Hastalar"], ["/takvim", "Takvim"], ["/stok", "Stok"], ["/ayarlar", "Ayarlar"]];
+const NAV: [string, string][] = [["/", "Bugün"], ["/hastalar", "Hastalar"], ["/muayeneler", "Muayeneler"], ["/takvim", "Takvim"], ["/stok", "Stok"], ["/ayarlar", "Ayarlar"]];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const p = await getProfile();

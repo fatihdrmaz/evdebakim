@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, CalendarDays, Package, Settings, type LucideIcon } from "lucide-react";
+import { Home, Users, FolderOpen, CalendarDays, Package, Settings, type LucideIcon } from "lucide-react";
 
-const ICONS: Record<string, LucideIcon> = { "/": Home, "/hastalar": Users, "/takvim": CalendarDays, "/stok": Package, "/ayarlar": Settings };
+const ICONS: Record<string, LucideIcon> = { "/": Home, "/hastalar": Users, "/muayeneler": FolderOpen, "/takvim": CalendarDays, "/stok": Package, "/ayarlar": Settings };
 
 export default function NavLinks({ items, variant }: { items: [string, string][]; variant: "side" | "bottom" }) {
   const path = usePathname();
