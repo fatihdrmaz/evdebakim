@@ -1,27 +1,36 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2 } from "lucide-react";
+import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2 } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl, dt, d, METHOD } from "@/lib/format";
-import { addPayment, updateEncounter, setEncounterStatus } from "@/lib/actions";
+import { addPayment, updateEncounter, setEncounterStatus, createSale } from "@/lib/actions";
 import QuickPlanner from "@/components/QuickPlanner";
+import SaleForm from "@/components/SaleForm";
 import { PageHeader, Card, StatusBadge, Empty, Alert, Field } from "@/components/ui";
+
+const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
 
 export default async function Encounter({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const sb = await createClient(); const me = await getProfile();
   const { data: e } = await sb.from("encounters").select("*, patients(*), doctors(full_name)").eq("id", id).single();
   if (!e) notFound();
   const p = e.patients; const name = `${p.first_name} ${p.last_name}`; const staff = me?.role !== "hekim"; const open = e.status === "acik";
-  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: history }] = await Promise.all([
+  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: services }, { data: history }] = await Promise.all([
     sb.from("anamnesis").select("*").eq("patient_id", p.id).maybeSingle(),
     sb.from("sale_balances").select("*, services(name), sessions(id, seq, scheduled_at, status, nurse_id), payments(id, amount, method, paid_at)").eq("encounter_id", id).order("created_at"),
     sb.from("doctors").select("id, full_name").order("full_name"),
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
-    sb.from("encounters").select("id, opened_at, status, complaint").eq("patient_id", p.id).neq("id", id).order("opened_at", { ascending: false }).limit(5),
+    sb.from("services").select("id, name, default_price").eq("is_active", true).order("name"),
+    sb.from("encounters").select("id, opened_at, status, complaint, diagnosis").eq("patient_id", p.id).neq("id", id).order("opened_at", { ascending: false }).limit(5),
   ]);
   const totalBalance = (sales ?? []).reduce((a: number, s: any) => a + Number(s.balance), 0);
   const allSessions = (sales ?? []).flatMap((s: any) => s.sessions);
   const doneCount = allSessions.filter((x: any) => x.status === "tamamlandi").length;
+  const sessionIds = allSessions.map((x: any) => x.id);
+  const seqBySession = Object.fromEntries(allSessions.map((x: any) => [x.id, x.seq]));
+  const { data: recentVitals } = sessionIds.length
+    ? await sb.from("vitals").select("*").in("session_id", sessionIds).order("measured_at", { ascending: false }).limit(6)
+    : { data: [] as any[] };
 
   return (
     <div className="space-y-5">
@@ -38,8 +47,8 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
 
       <div className="grid lg:grid-cols-[1fr_20rem] gap-5 items-start">
         <div className="space-y-5">
-          <details className="card" open={!e.complaint && open}>
-            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Stethoscope className="size-4 text-brand-600 shrink-0" /><span className="card-title">Muayene Bilgileri</span><span className="flex-1 text-sm text-slate-500 truncate ml-1">{e.complaint ?? (open ? "Şikayet girilmedi" : "")}</span><span className="text-sm font-medium text-brand-700 shrink-0">{e.complaint ? "Düzenle" : "Doldur"}</span></summary>
+          <details className="card" open>
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Stethoscope className="size-4 text-brand-600 shrink-0" /><span className="card-title">Muayene Bilgileri</span><span className="flex-1 text-sm text-slate-500 truncate ml-1">{e.complaint ?? (open ? "Şikayet girilmedi" : "")}</span><span className="text-sm font-medium text-brand-700 shrink-0">Gizle / Göster</span></summary>
             <form action={updateEncounter} className="space-y-3 px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4"><input type="hidden" name="id" value={id} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Tarih"><input name="opened_at" type="date" className="input" defaultValue={e.opened_at} disabled={!open} /></Field>
@@ -53,12 +62,32 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
             </form>
           </details>
 
+          <Card title={<span className="flex items-center gap-2"><Activity className="size-4 text-brand-600" />Vital Bulgular</span>}>
+            {!recentVitals?.length ? <p className="text-sm text-slate-500">Bu muayeneye bağlı hiçbir seansta ölçüm girilmedi.</p> : (
+              <ul className="divide-rows">{recentVitals.map((v: any) => {
+                const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
+                return (
+                  <li key={v.id} className="flex items-start gap-3 py-2.5">
+                    <Link href={`/seans/${v.session_id}`} className="w-20 shrink-0 text-xs hover:underline">
+                      <div className="font-semibold">Seans {seqBySession[v.session_id] ?? "—"}</div>
+                      <div className="text-slate-500">{PHASE[v.phase] ?? v.phase}</div>
+                    </Link>
+                    <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
+                  </li>);
+              })}</ul>)}
+          </Card>
+
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Hizmetler & Seanslar <span className="text-sm font-medium text-slate-500">{doneCount}/{allSessions.length}</span></h2>
-            {staff && open && <Link href={`/muayene/${id}/satis`} className="btn"><Plus className="size-4" />Hizmet Ekle</Link>}
           </div>
           {staff && totalBalance > 0 && <Alert tone="danger"><Wallet className="size-4 mt-0.5 shrink-0" />Açık bakiye: <b className="num">{tl(totalBalance)}</b></Alert>}
-          {!sales?.length && <Card><Empty icon={Receipt} title="Henüz hizmet eklenmedi" hint="Hizmet ekleyin; seanslar otomatik açılır, sonra hızlı planlama ile günlere dağıtın." action={staff && open && <Link href={`/muayene/${id}/satis`} className="btn"><Plus className="size-4" />Hizmet Ekle</Link>} /></Card>}
+          {staff && open && (
+            <details className="card">
+              <summary className="flex items-center gap-2 px-4 sm:px-5 py-3.5 cursor-pointer"><Plus className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">Hizmet Ekle</span></summary>
+              <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4"><SaleForm patientId={p.id} encounterId={id} services={services ?? []} action={createSale} /></div>
+            </details>
+          )}
+          {!sales?.length && <Card><Empty icon={Receipt} title="Henüz hizmet eklenmedi" hint="Yukarıdan hizmet ekleyin; seanslar otomatik açılır, sonra hızlı planlama ile günlere dağıtın." /></Card>}
           {sales?.map((s: any) => {
             const sess = [...s.sessions].sort((a: any, b: any) => a.seq - b.seq); const unsched = sess.filter((x: any) => !x.scheduled_at && x.status === "planlandi").length; const openSess = sess.filter((x: any) => x.status === "planlandi").length;
             return (
@@ -104,7 +133,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
           </Card>
           <Card title="Önceki Muayeneler">
             {!history?.length ? <p className="text-sm text-slate-500">İlk muayene.</p> : (
-              <ul className="space-y-1.5">{history.map((h: any) => <li key={h.id}><Link href={`/muayene/${h.id}`} className="flex items-center gap-2 rounded-lg px-2 py-2 -mx-2 hover:bg-slate-50 text-sm"><CheckCircle2 className={`size-4 shrink-0 ${h.status === "acik" ? "text-amber-500" : "text-emerald-600"}`} /><span className="num">{d(h.opened_at)}</span><span className="text-slate-500 truncate">{h.complaint ?? ""}</span></Link></li>)}</ul>)}
+              <ul className="space-y-1.5">{history.map((h: any) => <li key={h.id}><Link href={`/muayene/${h.id}`} className="flex items-start gap-2 rounded-lg px-2 py-2 -mx-2 hover:bg-slate-50 text-sm"><CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${h.status === "acik" ? "text-amber-500" : "text-emerald-600"}`} /><span className="min-w-0"><span className="num block">{d(h.opened_at)}</span><span className="text-slate-500 truncate block">{h.diagnosis ?? h.complaint ?? "—"}</span></span></Link></li>)}</ul>)}
           </Card>
         </div>
       </div>
