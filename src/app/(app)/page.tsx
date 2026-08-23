@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, CalendarX, Wallet, PackageMinus, Clock, MapPin, ArrowRight, CheckCircle2, Phone, Navigation } from "lucide-react";
+import { CalendarDays, CalendarX, Wallet, PackageMinus, Clock, MapPin, ArrowRight, CheckCircle2, Phone, Navigation, FileText } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl } from "@/lib/format";
 import { Card, Stat, StatusBadge, Avatar, Empty, ListRow } from "@/components/ui";
@@ -9,12 +9,19 @@ export default async function Home() {
   const staff = p?.role !== "hekim";
   const start = new Date(); start.setHours(0, 0, 0, 0); const end = new Date(start); end.setDate(end.getDate() + 1);
   const [{ data: today }, { data: unplanned }, balRes, lowRes] = await Promise.all([
-    sb.from("sessions").select("id, seq, scheduled_at, status, patients(first_name,last_name,phone,address), sales(session_count, services(name))").gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at"),
+    sb.from("sessions").select("id, seq, scheduled_at, status, patients(first_name,last_name,phone,address), sales(session_count, services(name), encounter_id)").gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at"),
     sb.from("sessions").select("id, seq, patients(first_name,last_name), sales(session_count, services(name))").is("scheduled_at", null).eq("status", "planlandi").limit(20),
     staff ? sb.from("sale_balances").select("id, balance, patient_id, patients(first_name,last_name), services(name)").gt("balance", 0).order("created_at", { ascending: false }) : Promise.resolve({ data: [] as any[] }),
     staff ? sb.from("product_stock").select("id,name,stock,min_stock").eq("is_active", true) : Promise.resolve({ data: [] as any[] }),
   ]);
   const balances = balRes.data ?? []; const lows = (lowRes.data ?? []).filter((x: any) => x.stock <= x.min_stock);
+  const encIds = [...new Set((today ?? []).map((x: any) => x.sales.encounter_id).filter(Boolean))];
+  const { data: rxRows } = encIds.length
+    ? await sb.from("prescriptions").select("encounter_id, file_path").in("encounter_id", encIds).order("created_at", { ascending: false })
+    : { data: [] as any[] };
+  const latestRxPath: Record<string, string> = {};
+  for (const r of rxRows ?? []) if (!(r.encounter_id in latestRxPath)) latestRxPath[r.encounter_id] = r.file_path;
+  const rxUrls = Object.fromEntries(await Promise.all(Object.entries(latestRxPath).map(async ([encId, path]) => [encId, (await sb.storage.from("prescriptions").createSignedUrl(path, 3600)).data?.signedUrl])));
   const totalBal = balances.reduce((a: number, b: any) => a + Number(b.balance), 0);
   const done = (today ?? []).filter((x: any) => x.status === "tamamlandi").length;
   const dateStr = new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
@@ -49,6 +56,7 @@ export default async function Home() {
               <div className="flex items-center gap-1 shrink-0">
                 {x.patients.phone && <a href={`tel:${x.patients.phone}`} aria-label="Ara" className="btn-icon"><Phone className="size-4" /></a>}
                 {x.patients.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(x.patients.address)}`} target="_blank" rel="noopener noreferrer" aria-label="Yol tarifi" className="btn-icon"><Navigation className="size-4" /></a>}
+                {rxUrls[x.sales.encounter_id] && <a href={rxUrls[x.sales.encounter_id]} target="_blank" rel="noopener noreferrer" aria-label="Reçete" className="btn-icon"><FileText className="size-4" /></a>}
                 <StatusBadge status={x.status} />
               </div>
             </div>))}</div>)}

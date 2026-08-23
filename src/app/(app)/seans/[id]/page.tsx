@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil, FileText } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { dt } from "@/lib/format";
 import { addVital, updateVital, deleteVital, addStockMove, applyKit, applyMaterialKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
@@ -78,6 +78,8 @@ export default async function Session({ params }: { params: Promise<{ id: string
   const p = s.patients; const name = `${p.first_name} ${p.last_name}`;
   const start = vitals?.filter(v => v.phase === "baslangic") ?? []; const mid = vitals?.filter(v => v.phase === "ara") ?? []; const end = vitals?.filter(v => v.phase === "bitis") ?? [];
   const consentUrl = consent ? (await sb.storage.from("consents").createSignedUrl(consent.signature_path, 3600)).data?.signedUrl : null;
+  const { data: rx } = encId ? await sb.from("prescriptions").select("file_path").eq("encounter_id", encId).order("created_at", { ascending: false }).limit(1) : { data: [] as any[] };
+  const rxUrl = rx?.[0] ? (await sb.storage.from("prescriptions").createSignedUrl(rx[0].file_path, 3600)).data?.signedUrl : null;
   const needConsent = s.sales.services.requires_consent; const hasConsent = !!consent || !needConsent;
   const canComplete = start.length > 0 && end.length > 0 && hasConsent;
   const local = s.scheduled_at ? new Date(new Date(s.scheduled_at).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
@@ -98,7 +100,11 @@ export default async function Session({ params }: { params: Promise<{ id: string
   return (
     <div className="space-y-4 max-w-3xl">
       <PageHeader back={encId ? `/muayene/${encId}` : `/hastalar/${p.id}`} title={name} subtitle={`${s.sales.services.name} · Seans ${s.seq}/${s.sales.session_count}${s.scheduled_at ? ` · ${dt(s.scheduled_at)}` : ""}${exitTime ? ` · Çıkış ${exitTime}` : ""}`}
-        action={<div className="flex items-center gap-2"><Link href={`/hastalar/${p.id}/anamnez?back=/seans/${id}`} aria-label="Anamnez" className="btn-icon"><ClipboardList className="size-5" /></Link><StatusBadge status={s.status} /></div>} />
+        action={<div className="flex items-center gap-2">
+          <Link href={`/hastalar/${p.id}/anamnez?back=/seans/${id}`} aria-label="Anamnez" className="btn-icon"><ClipboardList className="size-5" /></Link>
+          {rxUrl && <a href={rxUrl} target="_blank" rel="noopener noreferrer" aria-label="Reçete" className="btn-icon"><FileText className="size-5" /></a>}
+          <StatusBadge status={s.status} />
+        </div>} />
 
       {/* Seans gezgini */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">{siblings?.map(x => <Link key={x.id} href={`/seans/${x.id}`} aria-current={x.id === id ? "page" : undefined} className={`size-9 shrink-0 rounded-lg flex items-center justify-center text-sm font-bold border transition-colors ${x.id === id ? "bg-brand-600 border-brand-600 text-white" : x.status === "tamamlandi" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : x.status === "iptal" ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-white border-slate-200 text-slate-700"}`}>{x.seq}</Link>)}</div>
@@ -143,9 +149,12 @@ export default async function Session({ params }: { params: Promise<{ id: string
           {!!moves?.length && <ul className="divide-rows rounded-xl border border-slate-200">{moves.map((m: any) => <li key={m.id} className="flex items-center gap-3 px-3.5 py-2 text-sm"><span className="flex-1">{m.products.name}</span><span className="badge badge-slate num">× {-m.quantity}</span>{open && <form action={deleteStockMove.bind(null, m.id, id)}><button aria-label="Sil" className="btn-icon size-8 text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}</li>)}</ul>}
           {!moves?.length && !open && <p className="text-sm text-slate-500">Düşüm yapılmadı.</p>}
           {open && !!kit?.length && !moves?.length && <form action={applyKit.bind(null, id)}><button className="btn w-full"><Package className="size-4" />Hizmet Paketini Uygula</button><p className="hint text-center">{kit.map((k: any) => `${k.quantity} × ${k.products.name}`).join(", ")}</p></form>}
-          {open && !!materialKits?.length && <form action={applyMaterialKit} className="grid grid-cols-[1fr_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
-            <Field label="Malzeme paketi" hint="Seçilen paketteki tüm ürünler tek seferde düşer"><select name="kit_id" className="input" required><option value="">Seçiniz</option>{materialKits.map((k: any) => <option key={k.id} value={k.id}>{k.name} · {k.material_kit_items.map((it: any) => `${it.quantity}×${it.products.name}`).join(", ")}</option>)}</select></Field>
-            <button className="btn-secondary"><Package className="size-4" />Uygula</button>
+          {open && !!materialKits?.length && <form action={applyMaterialKit} className="space-y-1.5"><input type="hidden" name="session_id" value={id} />
+            <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+              <Field label="Malzeme paketi"><select name="kit_id" className="input" required><option value="">Seçiniz</option>{materialKits.map((k: any) => <option key={k.id} value={k.id}>{k.name} · {k.material_kit_items.map((it: any) => `${it.quantity}×${it.products.name}`).join(", ")}</option>)}</select></Field>
+              <button className="btn-secondary shrink-0"><Package className="size-4" />Uygula</button>
+            </div>
+            <p className="hint">Seçilen paketteki tüm ürünler tek seferde düşer</p>
           </form>}
           {open && <form action={addStockMove} className="grid grid-cols-[1fr_4.5rem_auto] gap-2 items-end"><input type="hidden" name="session_id" value={id} />
             <Field label="Ürün ekle"><select name="product_id" className="input" required><option value="">Seçiniz</option>{products?.map(x => <option key={x.id} value={x.id}>{x.name} ({x.stock})</option>)}</select></Field>

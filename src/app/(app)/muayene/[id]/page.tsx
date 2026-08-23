@@ -74,11 +74,13 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
                   {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn-icon" aria-label="Görüntüle/indir"><Download className="size-4" /></a>}
                   {open && <form action={deletePrescription.bind(null, r.id, id, r.file_path)}><button aria-label="Sil" className="btn-icon text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}
                 </li>))}</ul>}
-              {open && <form action={addPrescription} className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
+              {open && <form action={addPrescription} className="space-y-3">
                 <input type="hidden" name="encounter_id" value={id} />
-                <Field label="Reçete dosyası (foto/PDF)"><input name="file" type="file" accept="image/*,.pdf" required className="input" /></Field>
-                <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
-                <button className="btn"><Plus className="size-4" />Yükle</button>
+                <Field label="Reçete dosyası (foto/PDF)"><input name="file" type="file" accept="image/*,.pdf" required className="block w-full min-w-0 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200" /></Field>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                  <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
+                  <button className="btn shrink-0"><Plus className="size-4" />Yükle</button>
+                </div>
               </form>}
             </div>
           </Card>

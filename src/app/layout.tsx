@@ -10,7 +10,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1, them
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr" className={figtree.variable}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans overflow-x-hidden">{children}</body>
     </html>
   );
 }
