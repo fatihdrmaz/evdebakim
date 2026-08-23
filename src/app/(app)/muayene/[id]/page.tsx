@@ -1,27 +1,29 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2, FileText, Trash2, Download } from "lucide-react";
+import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2, FileText, Trash2, Download, Folder, IdCard, FlaskConical } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl, dt, d, METHOD } from "@/lib/format";
-import { addPayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription } from "@/lib/actions";
+import { addPayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription, addDocument, deleteDocument } from "@/lib/actions";
 import QuickPlanner from "@/components/QuickPlanner";
 import SaleForm from "@/components/SaleForm";
 import { PageHeader, Card, StatusBadge, Empty, Alert, Field } from "@/components/ui";
 
 const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
+const DOC_CAT: Record<string, string> = { kimlik: "Kimlik", lab: "Lab Sonucu", diger: "Diğer" };
 
 export default async function Encounter({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const sb = await createClient(); const me = await getProfile();
   const { data: e } = await sb.from("encounters").select("*, patients(*), doctors(full_name)").eq("id", id).single();
   if (!e) notFound();
   const p = e.patients; const name = `${p.first_name} ${p.last_name}`; const staff = me?.role !== "hekim"; const open = e.status === "acik";
-  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: services }, { data: prescriptions }, { data: history }] = await Promise.all([
+  const [{ data: an }, { data: sales }, { data: doctors }, { data: nurses }, { data: services }, { data: prescriptions }, { data: documents }, { data: history }] = await Promise.all([
     sb.from("anamnesis").select("*").eq("patient_id", p.id).maybeSingle(),
     sb.from("sale_balances").select("*, services(name), sessions(id, seq, scheduled_at, status, nurse_id), payments(id, amount, method, paid_at)").eq("encounter_id", id).order("created_at"),
     sb.from("doctors").select("id, full_name").order("full_name"),
     sb.from("profiles").select("id, full_name").in("role", ["hemsire", "admin"]).eq("is_active", true),
     sb.from("services").select("id, name, default_price").eq("is_active", true).order("name"),
     sb.from("prescriptions").select("*").eq("encounter_id", id).order("created_at", { ascending: false }),
+    sb.from("encounter_documents").select("*").eq("encounter_id", id).order("created_at", { ascending: false }),
     sb.from("encounters").select("id, opened_at, status, complaint, diagnosis").eq("patient_id", p.id).neq("id", id).order("opened_at", { ascending: false }).limit(5),
   ]);
   const totalBalance = (sales ?? []).reduce((a: number, s: any) => a + Number(s.balance), 0);
@@ -33,6 +35,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
     ? await sb.from("vitals").select("*").in("session_id", sessionIds).order("measured_at", { ascending: false }).limit(6)
     : { data: [] as any[] };
   const rx = await Promise.all((prescriptions ?? []).map(async (r: any) => ({ ...r, url: (await sb.storage.from("prescriptions").createSignedUrl(r.file_path, 3600)).data?.signedUrl })));
+  const docs = await Promise.all((documents ?? []).map(async (r: any) => ({ ...r, url: (await sb.storage.from("documents").createSignedUrl(r.file_path, 3600)).data?.signedUrl })));
 
   return (
     <div className="space-y-5">
@@ -40,7 +43,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
         subtitle={`Muayene · ${d(e.opened_at)}${e.doctors ? ` · ${e.doctors.full_name}` : ""}`}
         action={staff && (open ? <form action={setEncounterStatus.bind(null, id, "kapali")}><button className="btn-secondary"><Lock className="size-4" /><span className="hidden sm:inline">Kapat</span></button></form> : <form action={setEncounterStatus.bind(null, id, "acik")}><button className="btn-secondary"><Unlock className="size-4" /><span className="hidden sm:inline">Yeniden Aç</span></button></form>)} />
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <a href={`tel:${p.phone}`} className="card card-pad flex items-center gap-3 hover:bg-slate-50"><span className="size-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0"><Phone className="size-5" /></span><div className="min-w-0"><div className="text-xs text-slate-500">Telefon</div><div className="font-semibold num truncate">{p.phone}</div></div></a>
         <div className="card card-pad flex items-center gap-3"><span className="size-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center shrink-0"><MapPin className="size-5" /></span><div className="min-w-0"><div className="text-xs text-slate-500">Adres</div><div className="font-semibold truncate">{p.address ?? "—"}</div></div></div>
       </div>
@@ -50,8 +53,8 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
 
       <div className="grid lg:grid-cols-[1fr_20rem] gap-5 items-start">
         <div className="space-y-5">
-          <details className="card" open>
-            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Stethoscope className="size-4 text-brand-600 shrink-0" /><span className="card-title">Muayene Bilgileri</span><span className="flex-1 text-sm text-slate-500 truncate ml-1">{e.complaint ?? (open ? "Şikayet girilmedi" : "")}</span><span className="text-sm font-medium text-brand-700 shrink-0">Gizle / Göster</span></summary>
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Stethoscope className="size-4 text-brand-600 shrink-0" /><span className="card-title">Muayene Bilgileri</span><span className="flex-1 text-sm text-slate-500 truncate ml-1">{e.complaint ?? (open ? "Şikayet girilmedi" : "")}</span></summary>
             <form action={updateEncounter} className="space-y-3 px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4"><input type="hidden" name="id" value={id} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Tarih"><input name="opened_at" type="date" className="input" defaultValue={e.opened_at} disabled={!open} /></Field>
@@ -65,8 +68,9 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
             </form>
           </details>
 
-          <Card title={<span className="flex items-center gap-2"><FileText className="size-4 text-brand-600" />Reçete</span>}>
-            <div className="space-y-3">
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><FileText className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">Reçete</span>{rx.length > 0 && <span className="badge badge-slate">{rx.length}</span>}</summary>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4 space-y-3">
               {!rx.length && <p className="text-sm text-slate-500">Henüz reçete yüklenmedi.</p>}
               {!!rx.length && <ul className="divide-rows rounded-xl border border-slate-200">{rx.map((r: any) => (
                 <li key={r.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
@@ -84,22 +88,48 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
                 </div>
               </form>}
             </div>
-          </Card>
+          </details>
 
-          <Card title={<span className="flex items-center gap-2"><Activity className="size-4 text-brand-600" />Vital Bulgular</span>}>
-            {!recentVitals?.length ? <p className="text-sm text-slate-500">Bu muayeneye bağlı hiçbir seansta ölçüm girilmedi.</p> : (
-              <ul className="divide-rows">{recentVitals.map((v: any) => {
-                const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Solunum", v.resp_rate], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
-                return (
-                  <li key={v.id} className="flex items-start gap-3 py-2.5">
-                    <Link href={`/seans/${v.session_id}`} className="w-20 shrink-0 text-xs hover:underline">
-                      <div className="font-semibold">Seans {seqBySession[v.session_id] ?? "—"}</div>
-                      <div className="text-slate-500">{PHASE[v.phase] ?? v.phase}</div>
-                    </Link>
-                    <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
-                  </li>);
-              })}</ul>)}
-          </Card>
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Folder className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">Dosyalar</span>{docs.length > 0 && <span className="badge badge-slate">{docs.length}</span>}</summary>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4 space-y-3">
+              {!docs.length && <p className="text-sm text-slate-500">Henüz dosya yüklenmedi.</p>}
+              {!!docs.length && <ul className="divide-rows rounded-xl border border-slate-200">{docs.map((r: any) => (
+                <li key={r.id} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
+                  {r.category === "kimlik" ? <IdCard className="size-4 text-slate-400 shrink-0" /> : r.category === "lab" ? <FlaskConical className="size-4 text-slate-400 shrink-0" /> : <FileText className="size-4 text-slate-400 shrink-0" />}
+                  <div className="flex-1 min-w-0"><div className="font-medium truncate">{r.file_name ?? "Dosya"} <span className="badge badge-slate ml-1">{DOC_CAT[r.category] ?? r.category}</span></div><div className="text-xs text-slate-500">{dt(r.created_at)}{r.notes ? ` · ${r.notes}` : ""}</div></div>
+                  {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" className="btn-icon" aria-label="Görüntüle/indir"><Download className="size-4" /></a>}
+                  {open && <form action={deleteDocument.bind(null, r.id, id, r.file_path)}><button aria-label="Sil" className="btn-icon text-slate-400 hover:text-red-600"><Trash2 className="size-4" /></button></form>}
+                </li>))}</ul>}
+              {open && <form action={addDocument} className="space-y-3">
+                <input type="hidden" name="encounter_id" value={id} />
+                <Field label="Kategori"><select name="category" className="input" defaultValue="diger"><option value="kimlik">Kimlik</option><option value="lab">Lab Sonucu</option><option value="diger">Diğer</option></select></Field>
+                <Field label="Dosya (foto/PDF)"><input name="file" type="file" accept="image/*,.pdf" required className="block w-full min-w-0 text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200" /></Field>
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+                  <Field label="Not"><input name="notes" className="input" placeholder="İsteğe bağlı" /></Field>
+                  <button className="btn shrink-0"><Plus className="size-4" />Yükle</button>
+                </div>
+              </form>}
+            </div>
+          </details>
+
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><Activity className="size-4 text-brand-600 shrink-0" /><span className="card-title flex-1">Vital Bulgular</span></summary>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4">
+              {!recentVitals?.length ? <p className="text-sm text-slate-500">Bu muayeneye bağlı hiçbir seansta ölçüm girilmedi.</p> : (
+                <ul className="divide-rows">{recentVitals.map((v: any) => {
+                  const cells = [["TA", v.bp_sys != null || v.bp_dia != null ? `${v.bp_sys ?? "-"}/${v.bp_dia ?? "-"}` : null], ["Nabız", v.pulse], ["Solunum", v.resp_rate], ["Ateş", v.temp], ["SpO₂", v.spo2 != null ? `%${v.spo2}` : null], ["KŞ", v.glucose]].filter(([, x]) => x != null && x !== "");
+                  return (
+                    <li key={v.id} className="flex items-start gap-3 py-2.5">
+                      <Link href={`/seans/${v.session_id}`} className="w-20 shrink-0 text-xs hover:underline">
+                        <div className="font-semibold">Seans {seqBySession[v.session_id] ?? "—"}</div>
+                        <div className="text-slate-500">{PHASE[v.phase] ?? v.phase}</div>
+                      </Link>
+                      <div className="flex-1 flex flex-wrap gap-1.5">{cells.map(([k, x]) => <span key={k as string} className="badge badge-slate num">{k} <b>{x as string}</b></span>)}{v.notes && <span className="text-xs text-slate-500 w-full">{v.notes}</span>}</div>
+                    </li>);
+                })}</ul>)}
+            </div>
+          </details>
 
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold">Hizmetler & Seanslar <span className="text-sm font-medium text-slate-500">{doneCount}/{allSessions.length}</span></h2>
@@ -115,8 +145,13 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
           {sales?.map((s: any) => {
             const sess = [...s.sessions].sort((a: any, b: any) => a.seq - b.seq); const unsched = sess.filter((x: any) => !x.scheduled_at && x.status === "planlandi").length; const openSess = sess.filter((x: any) => x.status === "planlandi").length;
             return (
-              <Card key={s.id} title={<span className="flex items-center gap-2">{s.services.name}<span className="badge badge-slate">{s.session_count} seans</span></span>} action={<span className="text-sm text-slate-500">{d(s.created_at)}</span>}>
-                <div className="space-y-4">
+              <details key={s.id} className="card">
+                <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer">
+                  <span className="card-title flex-1 truncate">{s.services.name}</span>
+                  <span className="badge badge-slate shrink-0">{s.done_sessions}/{s.session_count} seans</span>
+                  <span className="text-sm text-slate-500 shrink-0 hidden sm:inline">{d(s.created_at)}</span>
+                </summary>
+                <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4 space-y-4">
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
                     <span><span className="text-slate-500">Seans</span> <b className="num">{tl(s.unit_price)}</b></span>
                     <span><span className="text-slate-500">Toplam</span> <b className="num">{tl(s.total)}</b></span>
@@ -143,22 +178,28 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
                       </div>
                     </details>)}
                 </div>
-              </Card>);
+              </details>);
           })}
         </div>
 
         <div className="space-y-5">
-          <Card title="Anamnez Özeti" action={staff && <Link href={`/hastalar/${p.id}/anamnez?back=/muayene/${id}`} className="btn-ghost btn-sm"><Pencil className="size-4" />{an ? "Güncelle" : "Al"}</Link>}>
-            {!an ? <p className="text-sm text-slate-500">Kayıt yok.</p> : (
-              <dl className="space-y-2.5 text-sm">
-                {[["Boy / Kilo", `${an.height_cm ?? "—"} cm / ${an.weight_kg ?? "—"} kg`], ["Fistül", an.fistula_side ? (an.fistula_side === "sag" ? "Sağ kol" : "Sol kol") : null], ["Kronik", an.chronic_diseases], ["İlaçlar", an.medications], ["Ameliyat", an.surgeries], ["Özel durum", an.special_conditions]].map(([k, v]) => (
-                  <div key={k as string}><dt className="text-xs font-medium text-slate-500">{k}</dt><dd>{v || "—"}</dd></div>))}
-              </dl>)}
-          </Card>
-          <Card title="Önceki Muayeneler">
-            {!history?.length ? <p className="text-sm text-slate-500">İlk muayene.</p> : (
-              <ul className="space-y-1.5">{history.map((h: any) => <li key={h.id}><Link href={`/muayene/${h.id}`} className="flex items-start gap-2 rounded-lg px-2 py-2 -mx-2 hover:bg-slate-50 text-sm"><CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${h.status === "acik" ? "text-amber-500" : "text-emerald-600"}`} /><span className="min-w-0"><span className="num block">{d(h.opened_at)}</span><span className="text-slate-500 truncate block">{h.diagnosis ?? h.complaint ?? "—"}</span></span></Link></li>)}</ul>)}
-          </Card>
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><span className="card-title flex-1">Anamnez Özeti</span>{staff && <Link href={`/hastalar/${p.id}/anamnez?back=/muayene/${id}`} className="btn-ghost btn-sm"><Pencil className="size-4" />{an ? "Güncelle" : "Al"}</Link>}</summary>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4">
+              {!an ? <p className="text-sm text-slate-500">Kayıt yok.</p> : (
+                <dl className="space-y-2.5 text-sm">
+                  {[["Boy / Kilo", `${an.height_cm ?? "—"} cm / ${an.weight_kg ?? "—"} kg`], ["Fistül", an.fistula_side ? (an.fistula_side === "sag" ? "Sağ kol" : "Sol kol") : null], ["Kronik", an.chronic_diseases], ["İlaçlar", an.medications], ["Ameliyat", an.surgeries], ["Özel durum", an.special_conditions]].map(([k, v]) => (
+                    <div key={k as string}><dt className="text-xs font-medium text-slate-500">{k}</dt><dd>{v || "—"}</dd></div>))}
+                </dl>)}
+            </div>
+          </details>
+          <details className="card">
+            <summary className="flex items-center gap-2 px-4 sm:px-5 py-4 cursor-pointer"><span className="card-title flex-1">Önceki Muayeneler</span>{!!history?.length && <span className="badge badge-slate">{history.length}</span>}</summary>
+            <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-slate-100 pt-4">
+              {!history?.length ? <p className="text-sm text-slate-500">İlk muayene.</p> : (
+                <ul className="space-y-1.5">{history.map((h: any) => <li key={h.id}><Link href={`/muayene/${h.id}`} className="flex items-start gap-2 rounded-lg px-2 py-2 -mx-2 hover:bg-slate-50 text-sm"><CheckCircle2 className={`size-4 shrink-0 mt-0.5 ${h.status === "acik" ? "text-amber-500" : "text-emerald-600"}`} /><span className="min-w-0"><span className="num block">{d(h.opened_at)}</span><span className="text-slate-500 truncate block">{h.diagnosis ?? h.complaint ?? "—"}</span></span></Link></li>)}</ul>)}
+            </div>
+          </details>
         </div>
       </div>
     </div>
