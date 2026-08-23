@@ -23,11 +23,14 @@ export default async function Calendar({ searchParams }: { searchParams: Promise
         {days.map(day => {
           const items = (data ?? []).filter((x: any) => isSameDay(new Date(x.scheduled_at), day)); const isToday = isSameDay(day, today);
           return (
-            <section key={day.toISOString()} className={`card p-2.5 min-h-32 flex flex-col ${isToday ? "ring-2 ring-brand-500 border-transparent" : ""}`}>
+            <section key={day.toISOString()} className={`card p-2.5 min-h-32 flex flex-col ${isToday ? "ring-2 ring-brand-500 border-transparent bg-brand-50/30" : ""}`}>
               <header className={`flex items-center justify-between md:flex-col md:items-start gap-1 px-1 pb-2 mb-2 border-b ${isToday ? "border-brand-100" : "border-slate-100"}`}>
                 <div className="flex items-baseline gap-1.5 md:flex-col md:gap-0">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{format(day, "EEEE", { locale: tr })}</span>
-                  <span className={`text-lg font-bold num ${isToday ? "text-brand-600" : "text-slate-900"}`}>{format(day, "d")}</span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className={`text-lg font-bold num ${isToday ? "text-brand-600" : "text-slate-900"}`}>{format(day, "d")}</span>
+                    {isToday && <span className="badge badge-blue">Bugün</span>}
+                  </span>
                 </div>
                 {items.length > 0 && <span className="badge badge-slate num">{items.length}</span>}
               </header>
