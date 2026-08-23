@@ -24,6 +24,17 @@ export const todayRangeIstanbul = () => {
   const end = new Date(start); end.setUTCDate(end.getUTCDate() + 1);
   return { start, end };
 };
+export function missingIdentityFields(p: { first_name?: string | null; last_name?: string | null; nationality?: string | null; tc_no?: string | null; passport_no?: string | null; birth_date?: string | null; gender?: string | null }) {
+  const missing: string[] = [];
+  if (!p.first_name) missing.push("Ad");
+  if (!p.last_name) missing.push("Soyad");
+  if (!p.nationality) missing.push("Uyruk");
+  else if (p.nationality === "tc" && !p.tc_no) missing.push("TC Kimlik No");
+  else if (p.nationality === "yabanci" && !p.passport_no) missing.push("Pasaport No");
+  if (!p.birth_date) missing.push("Doğum Tarihi");
+  if (!p.gender) missing.push("Cinsiyet");
+  return missing;
+}
 export const STATUS: Record<string, string> = { planlandi: "Planlandı", tamamlandi: "Tamamlandı", iptal: "İptal" };
 export const METHOD: Record<string, string> = { nakit: "Nakit", kart: "Kredi Kartı", havale: "Havale" };
 export const ROLE: Record<string, string> = { admin: "Yönetici", hemsire: "Hemşire", sekreter: "Sekreter", hekim: "Hekim" };

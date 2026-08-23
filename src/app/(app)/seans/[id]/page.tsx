@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil, FileText } from "lucide-react";
+import { Phone, MapPin, AlertTriangle, Pill, Activity, FileSignature, Package, CheckCircle2, Circle, Plus, Trash2, CalendarClock, XCircle, RotateCcw, Check, Navigation, ClipboardList, NotebookPen, Pencil, FileText, IdCard } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { dt, t, toIstanbulInputValue } from "@/lib/format";
+import { dt, t, toIstanbulInputValue, missingIdentityFields } from "@/lib/format";
 import { addVital, updateVital, deleteVital, addStockMove, applyKit, applyMaterialKit, deleteStockMove, scheduleSession, setSessionStatus, saveSessionNotes, deleteConsent } from "@/lib/actions";
 import ConsentPad from "@/components/ConsentPad";
+import PatientIdentityModal from "@/components/PatientIdentityModal";
 import { PageHeader, Card, StatusBadge, Alert, Field } from "@/components/ui";
 
 const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
@@ -116,6 +117,7 @@ export default async function Session({ params }: { params: Promise<{ id: string
       {an?.allergies && <Alert tone="danger"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Alerji:</b> {an.allergies}</span></Alert>}
       {an?.fistula_side && <Alert tone="warn"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Fistül:</b> {an.fistula_side === "sag" ? "Sağ kol" : "Sol kol"} — bu koldan TA ölçümü/iğne uygulamayın</span></Alert>}
       {an?.medications && <Alert tone="info"><Pill className="size-4 mt-0.5 shrink-0" /><span><b>İlaçlar:</b> {an.medications}</span></Alert>}
+      {missingIdentityFields(p).length > 0 && <Alert tone="warn"><IdCard className="size-4 mt-0.5 shrink-0" /><span className="flex-1">Kimlik bilgileri eksik: {missingIdentityFields(p).join(", ")}</span><PatientIdentityModal p={p} back={`/seans/${id}`} /></Alert>}
 
       {open && <div className="card px-4 py-3 flex items-center justify-between gap-2">{steps.map((st, i) => <span key={st.label} className={`flex items-center gap-1.5 text-xs sm:text-sm font-medium ${st.ok ? "text-emerald-700" : "text-slate-500"}`}>{st.ok ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}{st.label}{i < steps.length - 1 && <span className="hidden sm:block w-6 h-px bg-slate-200 ml-2" />}</span>)}</div>}
 

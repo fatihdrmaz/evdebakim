@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2, FileText, Trash2, Download, Folder, IdCard, FlaskConical } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { tl, dt, d, METHOD } from "@/lib/format";
+import { tl, dt, d, METHOD, missingIdentityFields } from "@/lib/format";
 import { addPayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription, addDocument, deleteDocument } from "@/lib/actions";
 import QuickPlanner from "@/components/QuickPlanner";
 import SaleForm from "@/components/SaleForm";
+import PatientIdentityModal from "@/components/PatientIdentityModal";
 import { PageHeader, Card, StatusBadge, Empty, Alert, Field } from "@/components/ui";
 
 const PHASE: Record<string, string> = { baslangic: "Başlangıç", ara: "Ara ölçüm", bitis: "Bitiş" };
@@ -50,6 +51,7 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
       {an?.allergies && <Alert tone="danger"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Alerji:</b> {an.allergies}</span></Alert>}
       {an?.fistula_side && <Alert tone="warn"><AlertTriangle className="size-4 mt-0.5 shrink-0" /><span><b>Fistül:</b> {an.fistula_side === "sag" ? "Sağ kol" : "Sol kol"} — bu koldan TA ölçümü/iğne uygulamayın</span></Alert>}
       {!an && <Alert tone="warn"><ClipboardList className="size-4 mt-0.5 shrink-0" /><span className="flex-1">Anamnez alınmamış.</span><Link href={`/hastalar/${p.id}/anamnez?back=/muayene/${id}`} className="font-semibold underline">Şimdi al</Link></Alert>}
+      {missingIdentityFields(p).length > 0 && <Alert tone="warn"><IdCard className="size-4 mt-0.5 shrink-0" /><span className="flex-1">Kimlik bilgileri eksik: {missingIdentityFields(p).join(", ")}</span><PatientIdentityModal p={p} back={`/muayene/${id}`} /></Alert>}
 
       <div className="grid lg:grid-cols-[1fr_20rem] gap-5 items-start">
         <div className="space-y-5">

@@ -24,6 +24,21 @@ export async function savePatient(fd: FormData) {
   revalidatePath("/hastalar"); redirect(`/muayene/${enc.id}`);
 }
 
+export async function updatePatientIdentity(fd: FormData) {
+  const sb = await createClient();
+  const id = s(fd, "id")!;
+  const { error } = await sb.from("patients").update({
+    first_name: s(fd, "first_name"), last_name: s(fd, "last_name"),
+    nationality: s(fd, "nationality"), tc_no: s(fd, "tc_no"), passport_no: s(fd, "passport_no"),
+    birth_date: s(fd, "birth_date"), gender: s(fd, "gender"),
+    updated_at: new Date().toISOString(),
+  }).eq("id", id);
+  if (error) throw error;
+  revalidatePath("/hastalar");
+  const back = s(fd, "back");
+  if (back) redirect(back);
+}
+
 export async function saveAnamnesis(fd: FormData) {
   const sb = await createClient();
   const patient_id = s(fd, "patient_id")!;

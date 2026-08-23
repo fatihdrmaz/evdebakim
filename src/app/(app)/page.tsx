@@ -43,21 +43,20 @@ export default async function Home() {
       <Card title="Bugünkü Seanslar" action={<Link href="/takvim" className="btn-ghost btn-sm">Takvim <ArrowRight className="size-4" /></Link>} flush>
         {!today?.length ? <Empty icon={CalendarDays} title="Bugün planlı seans yok" hint="Planlanmamış seansları aşağıdan saatlendirebilirsiniz." /> : (
           <div className="divide-rows">{today.map((x: any) => (
-            <div key={x.id} className="row px-2 sm:px-3">
-              <Link href={`/seans/${x.id}`} className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="flex flex-col items-center w-12 shrink-0"><span className="text-sm font-bold num">{t(x.scheduled_at)}</span></div>
-                <Avatar name={`${x.patients.first_name} ${x.patients.last_name}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</div>
-                  <div className="text-[13px] text-slate-500 truncate">{x.sales.services.name} · Seans {x.seq}/{x.sales.session_count}</div>
-                  {x.patients.address && <div className="text-xs text-slate-400 truncate flex items-center gap-1"><MapPin className="size-3" />{x.patients.address}</div>}
-                </div>
-              </Link>
-              <div className="flex items-center gap-1 shrink-0">
-                {x.patients.phone && <a href={`tel:${x.patients.phone}`} aria-label="Ara" className="btn-icon"><Phone className="size-4" /></a>}
-                {x.patients.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(x.patients.address)}`} target="_blank" rel="noopener noreferrer" aria-label="Yol tarifi" className="btn-icon"><Navigation className="size-4" /></a>}
-                {rxUrls[x.sales.encounter_id] && <a href={rxUrls[x.sales.encounter_id]} target="_blank" rel="noopener noreferrer" aria-label="Reçete" className="btn-icon"><FileText className="size-4" /></a>}
+            <div key={x.id} className="px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 shrink-0 text-sm font-bold num">{t(x.scheduled_at)}</div>
+                <Avatar name={`${x.patients.first_name} ${x.patients.last_name}`} size="sm" />
+                <Link href={`/seans/${x.id}`} className="flex-1 min-w-0"><div className="font-medium truncate">{x.patients.first_name} {x.patients.last_name}</div></Link>
                 <StatusBadge status={x.status} />
+              </div>
+              <div className="flex items-center gap-2 pl-[3.25rem]">
+                <div className="flex-1 min-w-0 text-[13px] text-slate-500 truncate">{x.sales.services.name} · Seans {x.seq}/{x.sales.session_count}{x.patients.address ? ` · ${x.patients.address}` : ""}</div>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  {x.patients.phone && <a href={`tel:${x.patients.phone}`} aria-label="Ara" className="btn-icon size-8"><Phone className="size-3.5" /></a>}
+                  {x.patients.address && <a href={`https://maps.google.com/?q=${encodeURIComponent(x.patients.address)}`} target="_blank" rel="noopener noreferrer" aria-label="Yol tarifi" className="btn-icon size-8"><Navigation className="size-3.5" /></a>}
+                  {rxUrls[x.sales.encounter_id] && <a href={rxUrls[x.sales.encounter_id]} target="_blank" rel="noopener noreferrer" aria-label="Reçete" className="btn-icon size-8"><FileText className="size-3.5" /></a>}
+                </div>
               </div>
             </div>))}</div>)}
       </Card>
