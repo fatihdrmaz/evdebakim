@@ -199,7 +199,7 @@ export async function addVital(fd: FormData) {
   const sb = await createClient();
   const session_id = s(fd, "session_id")!;
   const { error } = await sb.from("vitals").insert({
-    session_id, phase: s(fd, "phase"), bp_sys: n(fd, "bp_sys"), bp_dia: n(fd, "bp_dia"), pulse: n(fd, "pulse"), temp: n(fd, "temp"), spo2: n(fd, "spo2"), glucose: n(fd, "glucose"), notes: s(fd, "notes"),
+    session_id, phase: s(fd, "phase"), bp_sys: n(fd, "bp_sys"), bp_dia: n(fd, "bp_dia"), pulse: n(fd, "pulse"), resp_rate: n(fd, "resp_rate"), temp: n(fd, "temp"), spo2: n(fd, "spo2"), glucose: n(fd, "glucose"), notes: s(fd, "notes"),
   });
   if (error) throw error;
   revalidatePath(`/seans/${session_id}`);
