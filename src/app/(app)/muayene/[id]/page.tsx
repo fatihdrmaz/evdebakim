@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { Phone, MapPin, Plus, Pencil, AlertTriangle, Wallet, Stethoscope, Activity, CalendarClock, Receipt, ClipboardList, Lock, Unlock, CheckCircle2, FileText, Trash2, Download, Folder, IdCard, FlaskConical } from "lucide-react";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { tl, dt, d, METHOD, missingIdentityFields } from "@/lib/format";
-import { addPayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription, addDocument, deleteDocument } from "@/lib/actions";
+import { addPayment, updatePayment, deletePayment, updateEncounter, setEncounterStatus, createSale, addPrescription, deletePrescription, addDocument, deleteDocument } from "@/lib/actions";
 import QuickPlanner from "@/components/QuickPlanner";
 import SaleForm from "@/components/SaleForm";
 import PatientIdentityModal from "@/components/PatientIdentityModal";
@@ -170,7 +170,24 @@ export default async function Encounter({ params }: { params: Promise<{ id: stri
                     <details>
                       <summary className="btn-ghost btn-sm -ml-3 cursor-pointer"><Wallet className="size-4" />Ödemeler ({s.payments.length})</summary>
                       <div className="mt-3 space-y-3">
-                        {!!s.payments.length && <ul className="divide-rows rounded-xl border border-slate-200">{s.payments.map((pm: any) => <li key={pm.id} className="flex justify-between px-3.5 py-2.5 text-sm"><span>{d(pm.paid_at)} <span className="text-slate-500">· {METHOD[pm.method]}</span></span><b className="num">{tl(pm.amount)}</b></li>)}</ul>}
+                        {!!s.payments.length && <ul className="divide-rows rounded-xl border border-slate-200">{s.payments.map((pm: any) => (
+                          <li key={pm.id}>
+                            <details>
+                              <summary className="flex items-center gap-2 px-3.5 py-2.5 text-sm cursor-pointer list-none hover:bg-slate-50">
+                                <span className="flex-1">{d(pm.paid_at)} <span className="text-slate-500">· {METHOD[pm.method]}</span></span><b className="num">{tl(pm.amount)}</b><Pencil className="size-3.5 text-slate-400 shrink-0" />
+                              </summary>
+                              <div className="px-3.5 pb-3 pt-1 space-y-2 border-t border-slate-100 bg-slate-50/40">
+                                <form action={updatePayment} className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
+                                  <input type="hidden" name="id" value={pm.id} /><input type="hidden" name="encounter_id" value={id} />
+                                  <Field label="Tutar (₺)"><input name="amount" type="number" step="0.01" inputMode="decimal" className="input" required defaultValue={pm.amount} /></Field>
+                                  <Field label="Yöntem"><select name="method" className="input" defaultValue={pm.method}><option value="nakit">Nakit</option><option value="kart">Kredi Kartı</option><option value="havale">Havale</option></select></Field>
+                                  <Field label="Tarih"><input name="paid_at" type="date" className="input" defaultValue={String(pm.paid_at).slice(0, 10)} /></Field>
+                                  <button className="btn-secondary">Kaydet</button>
+                                </form>
+                                <form action={deletePayment.bind(null, pm.id, id)}><button className="btn-danger btn-sm"><Trash2 className="size-4" />Ödemeyi Sil</button></form>
+                              </div>
+                            </details>
+                          </li>))}</ul>}
                         {Number(s.balance) > 0 && <form action={addPayment} className="grid grid-cols-2 sm:grid-cols-4 gap-2 items-end">
                           <input type="hidden" name="sale_id" value={s.id} /><input type="hidden" name="encounter_id" value={id} />
                           <Field label="Tutar (₺)"><input name="amount" type="number" step="0.01" inputMode="decimal" className="input" required defaultValue={s.balance} /></Field>

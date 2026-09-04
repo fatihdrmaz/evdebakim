@@ -102,6 +102,20 @@ export async function addPayment(fd: FormData) {
   revalidatePath(`/muayene/${s(fd, "encounter_id")}`);
 }
 
+export async function updatePayment(fd: FormData) {
+  const sb = await createClient();
+  const { error } = await sb.from("payments").update({ amount: n(fd, "amount"), method: s(fd, "method"), paid_at: s(fd, "paid_at") ?? undefined, notes: s(fd, "notes") }).eq("id", s(fd, "id"));
+  if (error) throw error;
+  revalidatePath(`/muayene/${s(fd, "encounter_id")}`);
+}
+
+export async function deletePayment(id: string, encounter_id: string) {
+  const sb = await createClient();
+  const { error } = await sb.from("payments").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath(`/muayene/${encounter_id}`);
+}
+
 export async function addPrescription(fd: FormData) {
   const sb = await createClient();
   const { data: { user } } = await sb.auth.getUser();
