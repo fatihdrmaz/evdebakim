@@ -21,7 +21,8 @@ export default async function Encounters({ searchParams }: { searchParams: Promi
     acc.sessionCount += s.session_count; acc.done += s.done_sessions; acc.services.push((s.services as any).name);
     byEnc[s.encounter_id] = acc;
   }
-  const isDone = (e: any) => { const agg = byEnc[e.id]; return !!agg && agg.sessionCount > 0 && agg.done === agg.sessionCount; };
+  // Kapalı muayene = tamamlanmış sayılır (iptal edilen seanslar "tamamlandı" olmayacağı için seans sayısına bakılmaz).
+  const isDone = (e: any) => { const agg = byEnc[e.id]; return e.status === "kapali" || (!!agg && agg.sessionCount > 0 && agg.done === agg.sessionCount); };
   const encs = (allEncs ?? []).filter(e => filter === "tamamlanan" ? isDone(e) : !isDone(e));
   const qs = (nf: string) => `?f=${nf}${q ? `&q=${encodeURIComponent(q)}` : ""}`;
 
